@@ -61,3 +61,9 @@ stream_list.*
 *.i90
 
 src/core_*/inc
+
+# Downloaded mesh and test case data
+data/
+
+# PIO test log
+.piotest.log
