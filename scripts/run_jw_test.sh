@@ -141,10 +141,10 @@ cat > namelist.atmosphere << 'EOF'
     config_scalar_vadv_order = 3
     config_theta_adv_order   = 3
     config_scalar_adv_order  = 3
-    config_scalar_advection  = false
-    config_positive_definite = false
+    config_scalar_advection  = true
+    config_positive_definite  = true
     config_coef_3rd_order = 1.0
-    config_monotonic = false
+    config_monotonic = true
     config_epssm = 0.1
     config_smdiv = 0.1
 /
@@ -173,7 +173,7 @@ cat > namelist.atmosphere << 'EOF'
 
 &printout
     config_print_global_minmax_vel = true
-    config_print_global_minmax_sca = false
+    config_print_global_minmax_sca = true
 /
 
 &physics
@@ -211,12 +211,14 @@ cat > streams.atmosphere << 'EOF'
 
     <var name="latCell"/>
     <var name="lonCell"/>
+    <var name="areaCell"/>
     <var name="surface_pressure"/>
     <var name="pressure_base"/>
     <var name="pressure_p"/>
     <var name="theta"/>
     <var name="uReconstructZonal"/>
     <var name="uReconstructMeridional"/>
+    <var_array name="scalars"/>
 
 </stream>
 

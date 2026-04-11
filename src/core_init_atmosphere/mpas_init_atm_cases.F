@@ -466,6 +466,13 @@ module init_atm_cases
       real (kind=RKIND), dimension(:,:,:), pointer :: scalars
 !.. end initialization of moisture.
 
+!.. initialization of passive tracers:
+      integer, pointer :: index_tracer_1, index_tracer_2, index_tracer_3
+      real (kind=RKIND) :: tracer_lat0, tracer_lon0, tracer_sigma
+      real (kind=RKIND) :: tracer_k0, tracer_sigma_k
+      real (kind=RKIND) :: great_circle_dist
+!.. end initialization of passive tracers.
+
       integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
       integer, pointer :: nz1, nCellsSolve, nEdges, maxEdges, nVertices
 
@@ -514,7 +521,7 @@ module init_atm_cases
       real (kind=RKIND), dimension(:,:), pointer :: kiteAreasOnVertex
       real (kind=RKIND), pointer :: nominalMinDc
 
-      real (kind=RKIND), dimension(:), pointer :: latCell, latVertex, lonVertex, latEdge, lonEdge
+      real (kind=RKIND), dimension(:), pointer :: latCell, lonCell, latVertex, lonVertex, latEdge, lonEdge
       real (kind=RKIND), dimension(:), pointer :: fEdge, fVertex
 
       real (kind=RKIND), pointer :: sphere_radius
@@ -619,6 +626,7 @@ module init_atm_cases
       call mpas_pool_get_array(state, 'w', w)
 
       call mpas_pool_get_array(mesh, 'latCell', latCell)
+      call mpas_pool_get_array(mesh, 'lonCell', lonCell)
       call mpas_pool_get_array(mesh, 'latVertex', latVertex)
       call mpas_pool_get_array(mesh, 'lonVertex', lonVertex)
       call mpas_pool_get_array(mesh, 'latEdge', latEdge)
@@ -1227,6 +1235,48 @@ module init_atm_cases
             theta(k,iCell) = t(k,iCell) / (1.0 + 1.61 * scalars(index_qv,k,iCell))
          end do
       end do
+
+      !
+      ! Initialize passive tracers for advection testing
+      !
+      call mpas_pool_get_dimension(state, 'index_tracer_1', index_tracer_1)
+      call mpas_pool_get_dimension(state, 'index_tracer_2', index_tracer_2)
+      call mpas_pool_get_dimension(state, 'index_tracer_3', index_tracer_3)
+
+      if (associated(index_tracer_1) .and. associated(index_tracer_2) .and. associated(index_tracer_3)) then
+         call mpas_log_write(' Initializing passive tracers')
+
+         ! Tracer 1: Gaussian blob centered at 45N, 0E, mid-level
+         tracer_lat0 = 45.0 * pii / 180.0       ! 45 deg N
+         tracer_lon0 = 0.0                       ! 0 deg E
+         tracer_sigma = 10.0 * pii / 180.0       ! 10 deg half-width
+         tracer_k0 = real(nVertLevels) / 2.0     ! mid-level
+         tracer_sigma_k = 3.0                    ! vertical half-width in levels
+
+         do iCell = 1, nCells
+            great_circle_dist = sphere_distance(latCell(iCell), lonCell(iCell), &
+                                                tracer_lat0, tracer_lon0, 1.0_RKIND)
+            do k = 1, nVertLevels
+               scalars(index_tracer_1, k, iCell) = &
+                  exp(-great_circle_dist**2 / (2.0 * tracer_sigma**2)) * &
+                  exp(-(real(k) - tracer_k0)**2 / (2.0 * tracer_sigma_k**2))
+            end do
+
+            ! Tracer 2: Uniform background = 1.0 kg/kg
+            do k = 1, nVertLevels
+               scalars(index_tracer_2, k, iCell) = 1.0
+            end do
+
+            ! Tracer 3: Surface-concentrated, exponential decay with height
+            do k = 1, nVertLevels
+               scalars(index_tracer_3, k, iCell) = exp(-real(k - 1) / 5.0)
+            end do
+         end do
+
+         call mpas_log_write('   tracer_1: Gaussian blob at 45N, 0E, mid-level')
+         call mpas_log_write('   tracer_2: Uniform background = 1.0')
+         call mpas_log_write('   tracer_3: Surface-concentrated exponential decay')
+      end if
 
    end subroutine init_atm_case_jw
 

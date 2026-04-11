@@ -1171,6 +1171,15 @@
                         <var name="nwfa" array_group="number" units="nb kg^{-1}"
                              description="Gocart water-friendly aerosol number concentration"
                              packages="mp_thompson_aers_in"/>
+
+                        <var name="tracer_1" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 1: Gaussian blob for advection testing"/>
+
+                        <var name="tracer_2" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 2: Uniform background for mass conservation testing"/>
+
+                        <var name="tracer_3" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 3: Surface-concentrated for vertical advection testing"/>
                 </var_array>
 
                 <!-- Climatology for ocean mixed-layer depth -->
@@ -1213,6 +1222,15 @@
                         <var name="lbc_nwfa" array_group="number" units="nb kg^{-1}"
                              description="Gocart water-friendly aerosol number concentration on lateral boundary cells"
                              packages="mp_thompson_aers_in"/>
+
+                        <var name="lbc_tracer_1" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 1 on lateral boundary cells"/>
+
+                        <var name="lbc_tracer_2" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 2 on lateral boundary cells"/>
+
+                        <var name="lbc_tracer_3" array_group="passive" units="kg kg^{-1}"
+                             description="Passive tracer 3 on lateral boundary cells"/>
                 </var_array>
 
         </var_struct>
