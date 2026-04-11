@@ -67,3 +67,6 @@ data/
 
 # PIO test log
 .piotest.log
+
+# Python virtual environment
+.venv/
