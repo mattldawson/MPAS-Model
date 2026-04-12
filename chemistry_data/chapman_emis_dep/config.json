@@ -1,0 +1,196 @@
+{
+  "version": "1.0.0",
+  "name": "Chapman with Emissions and Deposition Test Species",
+  "species": [
+    {
+      "name": "N2",
+      "molecular weight [kg mol-1]": 0.0280134,
+      "__absolute tolerance": 1e-12,
+      "__mpas_constant_vmr": 0.7808
+    },
+    {
+      "name": "O2",
+      "molecular weight [kg mol-1]": 0.0319988,
+      "__absolute tolerance": 1e-12,
+      "__mpas_constant_vmr": 0.2095
+    },
+    {
+      "name": "M",
+      "is third body": true
+    },
+    {
+      "name": "O3",
+      "molecular weight [kg mol-1]": 0.0479982,
+      "__absolute tolerance": 1e-12
+    },
+    {
+      "name": "O",
+      "molecular weight [kg mol-1]": 0.0159994,
+      "__absolute tolerance": 1e-12
+    },
+    {
+      "name": "O1D",
+      "molecular weight [kg mol-1]": 0.0159994,
+      "__absolute tolerance": 1e-12
+    },
+    {
+      "name": "foo",
+      "molecular weight [kg mol-1]": 0.028,
+      "__absolute tolerance": 1e-12,
+      "__mpas_surface_emission_flux [molec cm-2 s-1]": 1e12
+    },
+    {
+      "name": "bar",
+      "molecular weight [kg mol-1]": 0.044,
+      "__absolute tolerance": 1e-12,
+      "__mpas_surface_emission_flux [molec cm-2 s-1]": 5e11,
+      "__mpas_surface_deposition_velocity [cm s-1]": 1.0
+    }
+  ],
+  "phases": [
+    {
+      "name": "gas",
+      "species": [
+        {"name": "N2"},
+        {"name": "O2"},
+        {"name": "O3"},
+        {"name": "O"},
+        {"name": "O1D"},
+        {"name": "foo"},
+        {"name": "bar"}
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "type": "ARRHENIUS",
+      "A": 6e-34,
+      "Ea": 0,
+      "B": -2.4,
+      "D": 300,
+      "E": 0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O",  "coefficient": 1},
+        {"species name": "O2", "coefficient": 1},
+        {"species name": "M",  "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O3", "coefficient": 1},
+        {"species name": "M",  "coefficient": 1}
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "name": "jo3_a",
+      "scaling factor": 1,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O3", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O1D", "coefficient": 1},
+        {"species name": "O2",  "coefficient": 1}
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "A": 2.15e-11,
+      "Ea": -1.518e-21,
+      "B": 0,
+      "D": 300,
+      "E": 0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O1D", "coefficient": 1},
+        {"species name": "N2",  "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O",  "coefficient": 1},
+        {"species name": "N2", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "A": 8e-12,
+      "Ea": 2.8428e-20,
+      "B": 0,
+      "D": 300,
+      "E": 0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O",  "coefficient": 1},
+        {"species name": "O3", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O2", "coefficient": 2}
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "name": "jo3_b",
+      "scaling factor": 1,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O3", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O",  "coefficient": 1},
+        {"species name": "O2", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "PHOTOLYSIS",
+      "name": "jo2",
+      "scaling factor": 1,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O2", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O", "coefficient": 2}
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "A": 3.3e-11,
+      "Ea": -7.59e-22,
+      "B": 0,
+      "D": 300,
+      "E": 0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "O1D", "coefficient": 1},
+        {"species name": "O2",  "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "O",  "coefficient": 1},
+        {"species name": "O2", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "foo",
+      "gas phase": "gas",
+      "products": [
+        {"species name": "foo", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "bar",
+      "gas phase": "gas",
+      "products": [
+        {"species name": "bar", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "bar",
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "bar", "coefficient": 1}
+      ]
+    }
+  ]
+}

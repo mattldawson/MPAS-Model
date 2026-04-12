@@ -2,6 +2,8 @@
 
 OBJS = mpas_chemistry_utils.o \
        mpas_chemistry_species.o \
+       mpas_chemistry_emissions.o \
+       mpas_chemistry_deposition.o \
        mpas_chemistry_state.o \
        mpas_chemistry_tuvx.o \
        mpas_chemistry_micm.o \
@@ -11,6 +13,10 @@ all: $(OBJS)
 
 # Dependencies
 mpas_chemistry_species.o:
+
+mpas_chemistry_emissions.o:
+
+mpas_chemistry_deposition.o:
 
 mpas_chemistry_state.o: mpas_chemistry_species.o
 
@@ -22,7 +28,8 @@ mpas_chemistry_micm.o:
 
 mpas_chemistry_driver.o: mpas_chemistry_micm.o mpas_chemistry_tuvx.o \
                           mpas_chemistry_state.o mpas_chemistry_utils.o \
-                          mpas_chemistry_species.o
+                          mpas_chemistry_species.o mpas_chemistry_emissions.o \
+                          mpas_chemistry_deposition.o
 
 clean:
 	$(RM) *.o *.mod *.f90

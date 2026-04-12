@@ -135,6 +135,7 @@ module atm_core_interface
       character(len=StrKIND), pointer :: config_chemistry_mechanism
       logical, pointer :: chem_chapman_inActive
       logical, pointer :: chem_analytical_inActive
+      logical, pointer :: chem_emis_dep_inActive
 
 
       ierr = atm_setup_packages_when(configs, packages)
@@ -221,15 +222,22 @@ module atm_core_interface
       nullify(chem_analytical_inActive)
       call mpas_pool_get_package(packages, 'chem_analytical_inActive', chem_analytical_inActive)
 
+      nullify(chem_emis_dep_inActive)
+      call mpas_pool_get_package(packages, 'chem_emis_dep_inActive', chem_emis_dep_inActive)
+
       if (associated(config_chemistry_mechanism) .and. &
           associated(chem_chapman_inActive) .and. &
-          associated(chem_analytical_inActive)) then
+          associated(chem_analytical_inActive) .and. &
+          associated(chem_emis_dep_inActive)) then
          chem_chapman_inActive = .false.
          chem_analytical_inActive = .false.
+         chem_emis_dep_inActive = .false.
          if (trim(config_chemistry_mechanism) == 'chapman') then
             chem_chapman_inActive = .true.
          else if (trim(config_chemistry_mechanism) == 'analytical') then
             chem_analytical_inActive = .true.
+         else if (trim(config_chemistry_mechanism) == 'chapman_emis_dep') then
+            chem_emis_dep_inActive = .true.
          end if
       else
          ierr = ierr + 1

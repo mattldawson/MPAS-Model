@@ -26,6 +26,10 @@ module mpas_chemistry_driver
                                       advected_micm_idx, advected_molar_mass, &
                                       n_constant, constant_micm_idx, constant_vmr, &
                                       tuvx_o3_mpas_idx, MW_AIR
+   use mpas_chemistry_emissions,  only : emissions_init, emissions_set_rates, &
+                                         emissions_cleanup
+   use mpas_chemistry_deposition, only : deposition_init, deposition_set_rates, &
+                                         deposition_cleanup
 
    implicit none
 
@@ -110,6 +114,19 @@ contains
       ! --- Discover species from MICM ---
       call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
       call chem_species_init(state, micm_solver_ptr, micm_state, errmsg, errcode)
+      if (errcode /= 0) then
+         call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
+         return
+      end if
+
+      ! --- Discover emission/deposition species from MICM ---
+      call emissions_init(micm_solver_ptr, micm_state, errmsg, errcode)
+      if (errcode /= 0) then
+         call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
+         return
+      end if
+
+      call deposition_init(micm_solver_ptr, micm_state, errmsg, errcode)
       if (errcode /= 0) then
          call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
          return
@@ -329,6 +346,18 @@ contains
                                      micm_state%rate_parameters_strides%variable,  &
                                      0, nCellsSolve * nVertLevels)
 
+         ! === Phase 2b: Set emission rate parameters ===
+         call emissions_set_rates(nCellsSolve, nVertLevels, zgrid, &
+                                  micm_state%rate_parameters, &
+                                  micm_state%rate_parameters_strides%grid_cell, &
+                                  micm_state%rate_parameters_strides%variable)
+
+         ! === Phase 2c: Set deposition rate parameters ===
+         call deposition_set_rates(nCellsSolve, nVertLevels, zgrid, &
+                                   micm_state%rate_parameters, &
+                                   micm_state%rate_parameters_strides%grid_cell, &
+                                   micm_state%rate_parameters_strides%variable)
+
          ! === Phase 3: Solve chemistry ===
          call micm_solve(solve_dt, errmsg, errcode)
          if (errcode /= 0) then
@@ -418,6 +447,8 @@ contains
       call micm_cleanup()
       if (tuvx_enabled) call tuvx_cleanup()
       call chem_species_cleanup()
+      call emissions_cleanup()
+      call deposition_cleanup()
       if (allocated(photo_mapping)) deallocate(photo_mapping)
       chemistry_enabled = .false.
       call mpas_log_write('[CheMPAS] Chemistry finalized')
