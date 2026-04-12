@@ -7,51 +7,23 @@ you can see at a glance that the phase is working.
 ## Quick Start
 
 ```bash
-# 1. Build the container (from the MPAS-Model directory)
 cd MPAS-Model
-podman build -f docker/Containerfile --target deps -t chempas-deps .
-podman build -f docker/Containerfile --target dev  -t chempas-dev  .
+bash scripts/setup_and_run.sh      # builds container, compiles MPAS, runs JW test
 
-# 2. Fetch physics externals (only needed once after a fresh clone)
-#    This replaces the fragile manage_externals tool with direct git clones.
-PHYS=src/core_atmosphere/physics
-git clone --depth 1 --branch 20250616-MPASv8.3 \
-    https://github.com/NCAR/MMM-physics.git $PHYS/physics_mmm
-mkdir -p $PHYS/physics_noaa
-git clone --depth 1 --branch MPAS_20241223 \
-    https://github.com/NOAA-GSL/UGWP.git $PHYS/physics_noaa/UGWP
-mkdir -p $PHYS/physics_wrf/files && cd $PHYS/physics_wrf/files
-wget -q https://github.com/MPAS-Dev/MPAS-Data/archive/refs/tags/v8.2.tar.gz
-tar xzf v8.2.tar.gz --strip-components=4 "MPAS-Data-8.2/atmosphere/physics_wrf/files"
-rm v8.2.tar.gz
-cd -
-
-# 3. Build MPAS inside the container
-podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
-  printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/tools/manage_externals/checkout_externals
-  chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
-  printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/physics/checkout_data_files.sh
-  chmod +x src/core_atmosphere/physics/checkout_data_files.sh
-  make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
-    MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
-    MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
-'
-
-# 4. Run the JW test (produces data/jw_480km/output.nc)
-podman run --rm \
-    -v "$(pwd):/mpas:Z" \
-    -w /mpas localhost/chempas-dev \
-    bash scripts/run_jw_test.sh 1
-
-# 5. Set up a Python virtual environment
+# Set up Python for the notebooks
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r verification/requirements.txt
 
-# 6. Open the notebooks
+# Open the notebooks
 jupyter notebook verification/
 # — or open in VS Code —
 ```
+
+The setup script is safe to re-run — every step is skipped if its output
+already exists.  Delete `data/jw_480km/` to force a fresh run, or
+`atmosphere_model` to force a rebuild.  Set `CONTAINER_RT=docker` if you
+use Docker instead of Podman.
 
 ## Notebooks
 
