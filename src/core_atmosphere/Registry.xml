@@ -405,25 +405,15 @@
                      description="Chemistry timestep; if 0 uses dynamics timestep"
                      possible_values="Non-negative real values"/>
 
-                <nml_option name="config_micm_config_path" type="character" default_value=""
+                <nml_option name="config_chemistry_config_path" type="character" default_value=""
                      units="-"
-                     description="Path to MICM mechanism configuration file"
-                     possible_values="Valid file path"/>
+                     description="Path to chemistry mechanism configuration folder"
+                     possible_values="Valid directory path (e.g., chemistry_data/chapman_emis_dep)"/>
 
-                <nml_option name="config_tuvx_config_path" type="character" default_value=""
+                <nml_option name="config_chemistry_surface_albedo" type="real" default_value="0.1"
                      units="-"
-                     description="Path to TUV-x configuration file"
-                     possible_values="Valid file path"/>
-
-                <nml_option name="config_tuvx_micm_mapping_path" type="character" default_value=""
-                     units="-"
-                     description="Path to TUV-x to MICM photolysis mapping file"
-                     possible_values="Valid file path"/>
-
-                <nml_option name="config_chemistry_mechanism" type="character" default_value=""
-                     units="-"
-                     description="Chemistry mechanism name for package activation (e.g., chapman, analytical)"
-                     possible_values="chapman, analytical, or empty string"/>
+                     description="Surface albedo for TUV-x photolysis calculations"
+                     possible_values="0.0 to 1.0"/>
         </nml_record>
 
 <!-- **************************************************************************************** -->
@@ -452,7 +442,7 @@
 
                 <package name="chem_chapman_in" description="Chapman chemistry species (O3, O, O1D)"/>
                 <package name="chem_analytical_in" description="Analytical test chemistry species (A, B, C)"/>
-                <package name="chem_emis_dep_in" description="Chapman + emissions/deposition test species (foo, bar)"/>
+                <package name="chem_chapman_emis_dep_in" description="Chapman + emissions/deposition test species (O3, O, O1D, foo, bar)"/>
         </packages>
 
 
@@ -1721,23 +1711,23 @@
 
                         <var name="o3" array_group="chapman" units="kg kg^{-1}"
                              description="Ozone mass mixing ratio"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="o" array_group="chapman" units="kg kg^{-1}"
                              description="Atomic oxygen mass mixing ratio"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="o1d" array_group="chapman" units="kg kg^{-1}"
                              description="Excited atomic oxygen O(1D) mass mixing ratio"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="foo" array_group="emis_dep" units="kg kg^{-1}"
                              description="Test emitted species (emission only)"
-                             packages="chem_emis_dep_in"/>
+                             packages="chem_chapman_emis_dep_in"/>
 
                         <var name="bar" array_group="emis_dep" units="kg kg^{-1}"
                              description="Test deposited species (emission + deposition)"
-                             packages="chem_emis_dep_in"/>
+                             packages="chem_chapman_emis_dep_in"/>
 
                         <var name="a" array_group="analytical" units="kg kg^{-1}"
                              description="Analytical test species A"
@@ -2113,23 +2103,23 @@
 
                         <var name="tend_o3" name_in_code="o3" array_group="chapman" units="kg m^{-3} s^{-1}"
                              description="Tendency of ozone mass per unit volume divided by d(zeta)/dz"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="tend_o" name_in_code="o" array_group="chapman" units="kg m^{-3} s^{-1}"
                              description="Tendency of atomic oxygen mass per unit volume divided by d(zeta)/dz"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="tend_o1d" name_in_code="o1d" array_group="chapman" units="kg m^{-3} s^{-1}"
                              description="Tendency of excited atomic oxygen O(1D) mass per unit volume divided by d(zeta)/dz"
-                             packages="chem_chapman_in;chem_emis_dep_in"/>
+                             packages="chem_chapman_in;chem_chapman_emis_dep_in"/>
 
                         <var name="tend_foo" name_in_code="foo" array_group="emis_dep" units="kg m^{-3} s^{-1}"
                              description="Tendency of test emitted species mass per unit volume divided by d(zeta)/dz"
-                             packages="chem_emis_dep_in"/>
+                             packages="chem_chapman_emis_dep_in"/>
 
                         <var name="tend_bar" name_in_code="bar" array_group="emis_dep" units="kg m^{-3} s^{-1}"
                              description="Tendency of test deposited species mass per unit volume divided by d(zeta)/dz"
-                             packages="chem_emis_dep_in"/>
+                             packages="chem_chapman_emis_dep_in"/>
 
                         <var name="tend_a" name_in_code="a" array_group="analytical" units="kg m^{-3} s^{-1}"
                              description="Tendency of analytical test species A"

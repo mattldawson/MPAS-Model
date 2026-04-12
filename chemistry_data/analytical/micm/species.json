@@ -4,19 +4,22 @@
       "name": "A",
       "type": "CHEM_SPEC",
       "absolute tolerance": 1e-12,
-      "molecular weight [kg mol-1]": 0.028
+      "molecular weight [kg mol-1]": 0.028,
+      "__is_advected": true
     },
     {
       "name": "B",
       "type": "CHEM_SPEC",
       "absolute tolerance": 1e-12,
-      "molecular weight [kg mol-1]": 0.028
+      "molecular weight [kg mol-1]": 0.028,
+      "__is_advected": true
     },
     {
       "name": "C",
       "type": "CHEM_SPEC",
       "absolute tolerance": 1e-12,
-      "molecular weight [kg mol-1]": 0.028
+      "molecular weight [kg mol-1]": 0.028,
+      "__is_advected": true
     }
   ]
 }

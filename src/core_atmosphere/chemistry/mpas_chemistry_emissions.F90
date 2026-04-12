@@ -13,6 +13,7 @@ module mpas_chemistry_emissions
    use mpas_kind_types,  only : RKIND
    use mpas_log,         only : mpas_log_write
    use iso_fortran_env,  only : real64
+   use mpas_chemistry_utils, only : AVOGADRO
 
    implicit none
 
@@ -27,8 +28,6 @@ module mpas_chemistry_emissions
 
    !> Surface emission flux [molec cm⁻² s⁻¹] for each emission species
    real (kind=real64), allocatable, save :: emitted_flux(:)
-
-   real (kind=real64), parameter :: AVOGADRO = 6.02214076e23_real64
 
 contains
 
@@ -52,15 +51,16 @@ contains
       character(len=128) :: species_name
       real (kind=real64) :: flux_val
 
-      ! Temporaries (max 100 emission species)
-      integer           :: tmp_rp_idx(100)
-      real (kind=real64) :: tmp_flux(100)
+      ! Temporaries (allocatable, sized to n_species)
+      integer, allocatable :: tmp_rp_idx(:)
+      real (kind=real64), allocatable :: tmp_flux(:)
 
       errmsg  = ''
       errcode = 0
       n_emis  = 0
 
       n_species = micm_state%species_ordering%size()
+      allocate(tmp_rp_idx(n_species), tmp_flux(n_species))
 
       do i = 1, n_species
          species_name = micm_state%species_ordering%name(i)
@@ -73,11 +73,6 @@ contains
          if (.not. error%is_success()) cycle  ! No emission for this species
 
          n_emis = n_emis + 1
-         if (n_emis > 100) then
-            errmsg = '[CheMPAS] Too many emission species (max 100)'
-            errcode = 1; return
-         end if
-
          tmp_flux(n_emis) = flux_val
 
          ! Look up MICM rate parameter: EMIS.<species_name>
@@ -101,6 +96,8 @@ contains
          emitted_rp_idx(1:n_emis) = tmp_rp_idx(1:n_emis)
          emitted_flux(1:n_emis) = tmp_flux(1:n_emis)
       end if
+
+      deallocate(tmp_rp_idx, tmp_flux)
 
       call mpas_log_write('[CheMPAS] Emissions: $i species', &
                           intArgs=(/n_emitted/))

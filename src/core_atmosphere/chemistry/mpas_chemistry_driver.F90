@@ -25,7 +25,7 @@ module mpas_chemistry_driver
                                       n_advected, advected_mpas_idx, &
                                       advected_micm_idx, advected_molar_mass, &
                                       n_constant, constant_micm_idx, constant_vmr, &
-                                      tuvx_o3_mpas_idx, MW_AIR
+                                      n_tuvx_profiles, tuvx_profiles
    use mpas_chemistry_emissions,  only : emissions_init, emissions_set_rates, &
                                          emissions_cleanup
    use mpas_chemistry_deposition, only : deposition_init, deposition_set_rates, &
@@ -60,13 +60,14 @@ contains
 
       type(mpas_pool_type), pointer :: mesh, state
       logical, pointer :: config_chemistry_enabled
-      character(len=StrKIND), pointer :: config_micm_config_path
-      character(len=StrKIND), pointer :: config_tuvx_config_path
-      character(len=StrKIND), pointer :: config_tuvx_micm_mapping_path
+      character(len=StrKIND), pointer :: config_chemistry_config_path
       real (kind=RKIND), pointer :: config_chemistry_dt
+      real (kind=RKIND), pointer :: config_chemistry_surface_albedo
       integer, pointer :: nCellsSolve, nVertLevels
 
+      character(len=512) :: micm_config_path, tuvx_config_path
       character(len=512) :: errmsg
+      logical :: file_exists
       integer :: errcode, r, n_grid_cells
       type(error_t) :: error
 
@@ -85,12 +86,21 @@ contains
       chem_dt = real(config_chemistry_dt, real64)
 
       call mpas_pool_get_config(domain % blocklist % configs, &
-                                'config_micm_config_path', config_micm_config_path)
+                                'config_chemistry_config_path', config_chemistry_config_path)
       call mpas_pool_get_config(domain % blocklist % configs, &
-                                'config_tuvx_config_path', config_tuvx_config_path)
-      call mpas_pool_get_config(domain % blocklist % configs, &
-                                'config_tuvx_micm_mapping_path', &
-                                config_tuvx_micm_mapping_path)
+                                'config_chemistry_surface_albedo', &
+                                config_chemistry_surface_albedo)
+
+      ! Derive sub-paths from config directory
+      ! MICM: try v1 (top-level config.json), fall back to v0 (micm/config.json)
+      micm_config_path = trim(config_chemistry_config_path) // '/config.json'
+      inquire(file=trim(micm_config_path), exist=file_exists)
+      if (.not. file_exists) then
+         micm_config_path = trim(config_chemistry_config_path) // '/micm/config.json'
+      end if
+
+      ! TUV-x: optional, check if tuvx/config.json exists
+      tuvx_config_path = trim(config_chemistry_config_path) // '/tuvx/config.json'
 
       ! Get mesh dimensions from first block
       call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
@@ -100,7 +110,7 @@ contains
       n_grid_cells = nCellsSolve * nVertLevels
 
       ! --- Setup MICM ---
-      call micm_setup(trim(config_micm_config_path), n_grid_cells, errmsg, errcode)
+      call micm_setup(trim(micm_config_path), n_grid_cells, errmsg, errcode)
       if (errcode /= 0) then
          call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
          return
@@ -133,9 +143,11 @@ contains
       end if
 
       ! --- Setup TUV-x (optional) ---
-      tuvx_enabled = (len_trim(config_tuvx_config_path) > 0)
+      inquire(file=trim(tuvx_config_path), exist=tuvx_enabled)
       if (tuvx_enabled) then
-         call tuvx_init(config_tuvx_config_path, nVertLevels, errmsg, errcode)
+         call tuvx_init(tuvx_config_path, nVertLevels, &
+                         real(config_chemistry_surface_albedo, real64), &
+                         errmsg, errcode)
          if (errcode /= 0) then
             call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
             return
@@ -163,16 +175,28 @@ contains
 
 
    !> Initialize TUV-x subsystem.
-   subroutine tuvx_init(config_path, nVertLevels, errmsg, errcode)
+   subroutine tuvx_init(config_path, nVertLevels, surface_albedo, errmsg, errcode)
 
       use mpas_chemistry_tuvx, only : tuvx_setup, n_photo_rxns, photo_ordering
 
-      character(len=StrKIND), pointer, intent(in) :: config_path
+      character(len=*), intent(in) :: config_path
       integer, pointer, intent(in) :: nVertLevels
+      real (kind=real64), intent(in) :: surface_albedo
       character(len=*), intent(out) :: errmsg
       integer, intent(out) :: errcode
 
-      call tuvx_setup(trim(config_path), nVertLevels, errmsg, errcode)
+      character(len=64), allocatable :: profile_names(:)
+      integer :: i
+
+      ! Build profile name array from tuvx_profiles descriptors
+      allocate(profile_names(n_tuvx_profiles))
+      do i = 1, n_tuvx_profiles
+         profile_names(i) = tuvx_profiles(i)%profile_name
+      end do
+
+      call tuvx_setup(trim(config_path), nVertLevels, n_tuvx_profiles, &
+                       profile_names, surface_albedo, errmsg, errcode)
+      deallocate(profile_names)
       if (errcode /= 0) return
 
       n_photo_rxns_local = n_photo_rxns
@@ -238,11 +262,6 @@ contains
       real (kind=RKIND), allocatable :: temp_2d(:,:)    ! (nVL, nCells)
       real (kind=RKIND), allocatable :: pres_2d(:,:)    ! (nVL, nCells)
       real (kind=RKIND), allocatable :: rho_2d(:,:)     ! (nVL, nCells)
-
-      ! Per-column arrays (stack — max supported nVertLevels = 200)
-      real (kind=RKIND)  :: o3_col(200), zgrid_col(201)
-      real (kind=RKIND)  :: rho_col(200)
-      real (kind=real64) :: photo_col(200, 10)
 
       ! All-cell photolysis rates
       real (kind=real64), allocatable :: photo_all(:,:,:)  ! (nVL, nCells, n_photo)
@@ -327,7 +346,7 @@ contains
 
          if (tuvx_enabled .and. n_photo_rxns_local > 0) then
             call run_tuvx_photolysis(nCellsSolve, nVertLevels, scalars, &
-                                     rho_2d, zgrid, latCell, lonCell, &
+                                     temp_2d, rho_2d, zgrid, latCell, lonCell, &
                                      julday, ut_hours, earth_sun_r64, &
                                      photo_all)
          end if
@@ -383,7 +402,7 @@ contains
 
    !> Run TUV-x photolysis for all columns.
    subroutine run_tuvx_photolysis(nCellsSolve, nVertLevels, scalars, &
-                                   rho_2d, zgrid, latCell, lonCell, &
+                                   temp_2d, rho_2d, zgrid, latCell, lonCell, &
                                    julday, ut_hours, earth_sun_r64, &
                                    photo_all)
 
@@ -391,6 +410,7 @@ contains
 
       integer, intent(in) :: nCellsSolve, nVertLevels
       real (kind=RKIND), intent(in) :: scalars(:,:,:)
+      real (kind=RKIND), intent(in) :: temp_2d(:,:)
       real (kind=RKIND), intent(in) :: rho_2d(:,:)
       real (kind=RKIND), intent(in) :: zgrid(:,:)
       real (kind=RKIND), intent(in) :: latCell(:), lonCell(:)
@@ -399,8 +419,9 @@ contains
       real (kind=real64), intent(in) :: earth_sun_r64
       real (kind=real64), intent(inout) :: photo_all(:,:,:)
 
-      real (kind=RKIND)  :: o3_col(200), zgrid_col(201), rho_col(200)
-      real (kind=real64) :: photo_col(200, 10)
+      real (kind=RKIND)  :: zgrid_col(nVertLevels+1), rho_col(nVertLevels)
+      real (kind=RKIND)  :: temp_col(nVertLevels)
+      real (kind=real64) :: photo_col(nVertLevels, n_photo_rxns_local)
       real (kind=real64) :: sza_r64
       real (kind=RKIND)  :: sza
       character(len=512) :: errmsg
@@ -411,18 +432,13 @@ contains
                                            julday, ut_hours)
          sza_r64 = real(sza, real64)
 
-         ! Get O3 column for TUV-x (if O3 exists in mechanism)
-         if (tuvx_o3_mpas_idx > 0) then
-            o3_col(1:nVertLevels) = scalars(tuvx_o3_mpas_idx, 1:nVertLevels, iCell)
-         else
-            o3_col(1:nVertLevels) = 0.0_RKIND
-         end if
-
          rho_col(1:nVertLevels)     = rho_2d(1:nVertLevels, iCell)
+         temp_col(1:nVertLevels)    = temp_2d(1:nVertLevels, iCell)
          zgrid_col(1:nVertLevels+1) = zgrid(1:nVertLevels+1, iCell)
 
-         call tuvx_run_column(nVertLevels, zgrid_col, rho_col, &
-                               rho_col, o3_col, sza_r64, earth_sun_r64, &
+         call tuvx_run_column(nVertLevels, zgrid_col, temp_col, &
+                               rho_col, scalars(:, :, iCell), &
+                               sza_r64, earth_sun_r64, &
                                photo_col, errmsg, errcode)
          if (errcode /= 0) then
             call mpas_log_write('[CheMPAS] TUV-x error cell $i: ' // &

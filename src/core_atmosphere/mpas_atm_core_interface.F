@@ -132,10 +132,10 @@ module atm_core_interface
       logical, pointer :: config_ugwp_diags
       character(len=StrKIND) :: attvalue
       integer :: local_ierr
-      character(len=StrKIND), pointer :: config_chemistry_mechanism
-      logical, pointer :: chem_chapman_inActive
-      logical, pointer :: chem_analytical_inActive
-      logical, pointer :: chem_emis_dep_inActive
+      character(len=StrKIND), pointer :: config_chemistry_config_path
+      logical, pointer :: chem_pkg_ptr
+      character(len=StrKIND) :: chem_config_path, mechanism_name, package_name
+      integer :: path_len, last_slash
 
 
       ierr = atm_setup_packages_when(configs, packages)
@@ -212,37 +212,33 @@ module atm_core_interface
 
       !
       ! Chemistry mechanism species packages
+      ! Convention: config_chemistry_config_path basename → chem_<basename>_inActive
       !
-      nullify(config_chemistry_mechanism)
-      call mpas_pool_get_config(configs, 'config_chemistry_mechanism', config_chemistry_mechanism)
+      nullify(config_chemistry_config_path)
+      call mpas_pool_get_config(configs, 'config_chemistry_config_path', config_chemistry_config_path)
 
-      nullify(chem_chapman_inActive)
-      call mpas_pool_get_package(packages, 'chem_chapman_inActive', chem_chapman_inActive)
-
-      nullify(chem_analytical_inActive)
-      call mpas_pool_get_package(packages, 'chem_analytical_inActive', chem_analytical_inActive)
-
-      nullify(chem_emis_dep_inActive)
-      call mpas_pool_get_package(packages, 'chem_emis_dep_inActive', chem_emis_dep_inActive)
-
-      if (associated(config_chemistry_mechanism) .and. &
-          associated(chem_chapman_inActive) .and. &
-          associated(chem_analytical_inActive) .and. &
-          associated(chem_emis_dep_inActive)) then
-         chem_chapman_inActive = .false.
-         chem_analytical_inActive = .false.
-         chem_emis_dep_inActive = .false.
-         if (trim(config_chemistry_mechanism) == 'chapman') then
-            chem_chapman_inActive = .true.
-         else if (trim(config_chemistry_mechanism) == 'analytical') then
-            chem_analytical_inActive = .true.
-         else if (trim(config_chemistry_mechanism) == 'chapman_emis_dep') then
-            chem_emis_dep_inActive = .true.
+      if (associated(config_chemistry_config_path) .and. &
+          len_trim(config_chemistry_config_path) > 0) then
+         chem_config_path = trim(config_chemistry_config_path)
+         ! Strip trailing slash if present
+         path_len = len_trim(chem_config_path)
+         if (path_len > 0 .and. chem_config_path(path_len:path_len) == '/') then
+            path_len = path_len - 1
          end if
-      else
-         ierr = ierr + 1
-         call mpas_log_write('Package setup failed for chemistry mechanism packages', &
-                             messageType=MPAS_LOG_ERR)
+         ! Extract basename (everything after last '/')
+         last_slash = index(chem_config_path(1:path_len), '/', back=.true.)
+         mechanism_name = chem_config_path(last_slash+1:path_len)
+         ! Construct and activate package
+         package_name = 'chem_' // trim(mechanism_name) // '_inActive'
+         nullify(chem_pkg_ptr)
+         call mpas_pool_get_package(packages, trim(package_name), chem_pkg_ptr)
+         if (associated(chem_pkg_ptr)) then
+            chem_pkg_ptr = .true.
+         else
+            ierr = ierr + 1
+            call mpas_log_write('Chemistry package "' // trim(package_name) // &
+                                '" not found in Registry.', messageType=MPAS_LOG_ERR)
+         end if
       end if
 
 #ifdef DO_PHYSICS

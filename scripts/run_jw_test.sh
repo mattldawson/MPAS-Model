@@ -15,14 +15,14 @@ MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NPROCS="${1:-1}"
 MECHANISM="${2:-chapman}"
 
-# Validate mechanism
-case "${MECHANISM}" in
-    chapman|analytical|chapman_emis_dep) ;;
-    *)
-        echo "ERROR: Unknown mechanism '${MECHANISM}'. Use 'chapman', 'analytical', or 'chapman_emis_dep'." >&2
-        exit 1
-        ;;
-esac
+# Chemistry config path: convention-based (single directory)
+CHEM_CONFIG="chemistry_data/${MECHANISM}"
+
+# Verify mechanism directory exists
+if [ ! -d "${MPAS_DIR}/chemistry_data/${MECHANISM}" ]; then
+    echo "ERROR: Mechanism directory '${MPAS_DIR}/chemistry_data/${MECHANISM}' not found." >&2
+    exit 1
+fi
 
 # Verify executables exist
 for exe in init_atmosphere_model atmosphere_model; do
@@ -60,8 +60,8 @@ done
 
 # Link chemistry configuration data
 cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
-# TUV-x data files: only needed for chapman-based mechanisms
-if [ "${MECHANISM}" = "chapman" ] || [ "${MECHANISM}" = "chapman_emis_dep" ]; then
+# TUV-x data files: only needed if mechanism has tuvx/ directory
+if [ -d "${MPAS_DIR}/chemistry_data/${MECHANISM}/tuvx" ]; then
     MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
     if [ -d "${MUSICA_DATA}" ]; then
         mkdir -p chemistry_data/${MECHANISM}/tuvx/data
@@ -70,12 +70,12 @@ if [ "${MECHANISM}" = "chapman" ] || [ "${MECHANISM}" = "chapman_emis_dep" ]; th
         mkdir -p chemistry_data/${MECHANISM}/tuvx/data
         ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/${MECHANISM}/tuvx/data/cross_sections
     else
-        echo "WARNING: TUV-x data files not found. Chapman chemistry may fail." >&2
+        echo "WARNING: TUV-x data files not found. Photolysis chemistry may fail." >&2
     fi
 fi
 
 # ---- Create init namelist ----
-cat > namelist.init_atmosphere << 'EOF'
+cat > namelist.init_atmosphere << EOF
 &nhyd_model
     config_start_time = '0000-01-01_00:00:00'
     config_init_case = 2
@@ -87,6 +87,10 @@ cat > namelist.init_atmosphere << 'EOF'
 
 &decomposition
     config_block_decomp_file_prefix = 'x1.2562.graph.info.part.'
+/
+
+&chemistry
+    config_chemistry_config_path = '${CHEM_CONFIG}'
 /
 EOF
 
@@ -146,21 +150,6 @@ echo "  init_atmosphere_model succeeded"
 
 # ---- Create atmosphere namelist ----
 # 480-km mesh: dt ~ 1800s (scale from 120-km=450s by ratio 480/120=4)
-# Chemistry settings depend on selected mechanism
-if [ "${MECHANISM}" = "chapman" ] || [ "${MECHANISM}" = "chapman_emis_dep" ]; then
-    TUVX_CONFIG="chemistry_data/${MECHANISM}/tuvx/config.json"
-    TUVX_MAPPING="chemistry_data/${MECHANISM}/tuvx_micm_mapping.json"
-elif [ "${MECHANISM}" = "analytical" ]; then
-    TUVX_CONFIG=""
-    TUVX_MAPPING=""
-fi
-
-# MICM config path — v0 mechanisms use micm/ subdir, v1 uses top-level config.json
-if [ -f "chemistry_data/${MECHANISM}/micm/config.json" ]; then
-    MICM_CONFIG="chemistry_data/${MECHANISM}/micm/config.json"
-else
-    MICM_CONFIG="chemistry_data/${MECHANISM}/config.json"
-fi
 
 cat > namelist.atmosphere << EOF
 &nhyd_model
@@ -233,10 +222,8 @@ cat > namelist.atmosphere << EOF
 &chemistry
     config_chemistry_enabled = .true.
     config_chemistry_dt = 60.0
-    config_chemistry_mechanism = '${MECHANISM}'
-    config_micm_config_path = '${MICM_CONFIG}'
-    config_tuvx_config_path = '${TUVX_CONFIG}'
-    config_tuvx_micm_mapping_path = '${TUVX_MAPPING}'
+    config_chemistry_config_path = '${CHEM_CONFIG}'
+    config_chemistry_surface_albedo = 0.1
 /
 EOF
 

@@ -18,7 +18,6 @@ module mpas_chemistry_deposition
 
    private
    public :: deposition_init, deposition_set_rates, deposition_cleanup
-   public :: n_deposited
 
    !> Number of species with surface deposition
    integer, save :: n_deposited = 0
@@ -51,15 +50,16 @@ contains
       character(len=128) :: species_name
       real (kind=real64) :: vel_val
 
-      ! Temporaries (max 100 deposited species)
-      integer           :: tmp_rp_idx(100)
-      real (kind=real64) :: tmp_vel(100)
+      ! Temporaries (allocatable, sized to n_species)
+      integer, allocatable :: tmp_rp_idx(:)
+      real (kind=real64), allocatable :: tmp_vel(:)
 
       errmsg  = ''
       errcode = 0
       n_dep   = 0
 
       n_species = micm_state%species_ordering%size()
+      allocate(tmp_rp_idx(n_species), tmp_vel(n_species))
 
       do i = 1, n_species
          species_name = micm_state%species_ordering%name(i)
@@ -72,11 +72,6 @@ contains
          if (.not. error%is_success()) cycle  ! No deposition for this species
 
          n_dep = n_dep + 1
-         if (n_dep > 100) then
-            errmsg = '[CheMPAS] Too many deposited species (max 100)'
-            errcode = 1; return
-         end if
-
          tmp_vel(n_dep) = vel_val
 
          ! Look up MICM rate parameter: LOSS.<species_name>
@@ -100,6 +95,8 @@ contains
          deposited_rp_idx(1:n_dep) = tmp_rp_idx(1:n_dep)
          deposited_vel(1:n_dep) = tmp_vel(1:n_dep)
       end if
+
+      deallocate(tmp_rp_idx, tmp_vel)
 
       call mpas_log_write('[CheMPAS] Deposition: $i species', &
                           intArgs=(/n_deposited/))

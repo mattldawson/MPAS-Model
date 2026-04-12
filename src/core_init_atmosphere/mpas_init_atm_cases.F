@@ -473,16 +473,19 @@ module init_atm_cases
       real (kind=RKIND) :: great_circle_dist
 !.. end initialization of passive tracers.
 
-!.. initialization of Chapman chemistry species:
-      integer, pointer :: index_o3, index_o, index_o1d
-      real (kind=RKIND) :: z_km, o3_vmr, o3_mmr
-      real (kind=RKIND), parameter :: mw_o3 = 0.048_RKIND   ! O3 molar mass [kg/mol]
-      real (kind=RKIND), parameter :: mw_air = 0.029_RKIND   ! dry air molar mass [kg/mol]
-!.. end initialization of Chapman chemistry species.
-
-!.. initialization of analytical test species:
-      integer, pointer :: index_a, index_b, index_c
-!.. end initialization of analytical test species.
+!.. initialization of chemistry species from config file:
+      character(len=StrKIND), pointer :: config_chemistry_config_path
+      character(len=512) :: ic_filepath
+      logical :: ic_file_exists
+      integer :: ic_unit, ic_nheights, ic_nspecies, ic_ios, ic_h, ic_s
+      integer :: ic_len, ic_pos, ic_start
+      character(len=4096) :: ic_line
+      character(len=64), allocatable :: ic_species_names(:)
+      real (kind=RKIND), allocatable :: ic_heights(:), ic_profiles(:,:)
+      integer, allocatable :: ic_scalar_idx(:)
+      integer, pointer :: ic_idx_ptr
+      real (kind=RKIND) :: ic_z_km, ic_frac
+!.. end initialization of chemistry species.
 
       integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
       integer, pointer :: nz1, nCellsSolve, nEdges, maxEdges, nVertices
@@ -1290,63 +1293,181 @@ module init_atm_cases
       end if
 
       !
-      ! Initialize Chapman chemistry species (O3, O, O1D)
+      ! Initialize chemistry species from config-driven initial_conditions.csv
       !
-      call mpas_pool_get_dimension(state, 'index_o3', index_o3)
-      call mpas_pool_get_dimension(state, 'index_o', index_o)
-      call mpas_pool_get_dimension(state, 'index_o1d', index_o1d)
+      nullify(config_chemistry_config_path)
+      call mpas_pool_get_config(configs, 'config_chemistry_config_path', &
+                                config_chemistry_config_path)
 
-      if (associated(index_o3) .and. associated(index_o) .and. associated(index_o1d)) then
-         call mpas_log_write(' Initializing Chapman chemistry species')
+      ic_file_exists = .false.
+      if (associated(config_chemistry_config_path)) then
+         if (len_trim(config_chemistry_config_path) > 0) then
+            ic_filepath = trim(config_chemistry_config_path) // &
+                          '/initial_conditions.csv'
+            inquire(file=trim(ic_filepath), exist=ic_file_exists)
+         end if
+      end if
 
+      if (ic_file_exists) then
+         call mpas_log_write(' Initializing chemistry species from ' // &
+                             trim(ic_filepath))
+
+         ! First pass: count data rows to determine number of heights
+         ic_unit = 42
+         open(unit=ic_unit, file=trim(ic_filepath), status='old', &
+              action='read', iostat=ic_ios)
+         if (ic_ios /= 0) then
+            call mpas_log_write(' WARNING: Cannot open ' // trim(ic_filepath))
+            goto 999
+         end if
+
+         ! Read header line
+         read(ic_unit, '(A)', iostat=ic_ios) ic_line
+         if (ic_ios /= 0) then
+            call mpas_log_write(' WARNING: Cannot read header from ' // &
+                                trim(ic_filepath))
+            close(ic_unit)
+            goto 999
+         end if
+
+         ! Parse header: count comma-separated species names (skip first column = height_km)
+         ic_len = len_trim(ic_line)
+         ic_nspecies = 0
+         ic_pos = index(ic_line(1:ic_len), ',')
+         if (ic_pos > 0) then
+            ic_start = ic_pos + 1
+            do while (ic_start <= ic_len)
+               ic_nspecies = ic_nspecies + 1
+               ic_pos = index(ic_line(ic_start:ic_len), ',')
+               if (ic_pos == 0) exit
+               ic_start = ic_start + ic_pos
+            end do
+         end if
+
+         if (ic_nspecies == 0) then
+            call mpas_log_write(' WARNING: No species found in IC header')
+            close(ic_unit)
+            goto 999
+         end if
+
+         ! Extract species names from header
+         allocate(ic_species_names(ic_nspecies))
+         ic_pos = index(ic_line(1:ic_len), ',')
+         ic_start = ic_pos + 1
+         do ic_s = 1, ic_nspecies
+            ic_pos = index(ic_line(ic_start:ic_len), ',')
+            if (ic_pos == 0) then
+               ic_species_names(ic_s) = adjustl(ic_line(ic_start:ic_len))
+            else
+               ic_species_names(ic_s) = adjustl(ic_line(ic_start:ic_start+ic_pos-2))
+               ic_start = ic_start + ic_pos
+            end if
+         end do
+
+         ! Count data rows
+         ic_nheights = 0
+         do
+            read(ic_unit, '(A)', iostat=ic_ios) ic_line
+            if (ic_ios /= 0) exit
+            if (len_trim(ic_line) > 0) ic_nheights = ic_nheights + 1
+         end do
+
+         if (ic_nheights < 1) then
+            call mpas_log_write(' WARNING: No data rows in IC file')
+            close(ic_unit)
+            deallocate(ic_species_names)
+            goto 999
+         end if
+
+         ! Second pass: read data
+         allocate(ic_heights(ic_nheights))
+         allocate(ic_profiles(ic_nheights, ic_nspecies))
+         rewind(ic_unit)
+         read(ic_unit, '(A)') ic_line  ! skip header
+
+         do ic_h = 1, ic_nheights
+            if (ic_nspecies == 1) then
+               read(ic_unit, *, iostat=ic_ios) ic_heights(ic_h), &
+                                                ic_profiles(ic_h, 1)
+            else if (ic_nspecies == 2) then
+               read(ic_unit, *, iostat=ic_ios) ic_heights(ic_h), &
+                    ic_profiles(ic_h, 1), ic_profiles(ic_h, 2)
+            else if (ic_nspecies == 3) then
+               read(ic_unit, *, iostat=ic_ios) ic_heights(ic_h), &
+                    ic_profiles(ic_h, 1), ic_profiles(ic_h, 2), &
+                    ic_profiles(ic_h, 3)
+            else
+               ! Read height + first 3 species, then additional
+               read(ic_unit, *, iostat=ic_ios) ic_heights(ic_h), &
+                    (ic_profiles(ic_h, ic_s), ic_s = 1, ic_nspecies)
+            end if
+            if (ic_ios /= 0) then
+               call mpas_log_write(' WARNING: Error reading IC data row $i', &
+                                   intArgs=(/ic_h/))
+               ic_nheights = ic_h - 1
+               exit
+            end if
+         end do
+         close(ic_unit)
+
+         ! Map species names to scalar indices
+         allocate(ic_scalar_idx(ic_nspecies))
+         do ic_s = 1, ic_nspecies
+            nullify(ic_idx_ptr)
+            call mpas_pool_get_dimension(state, 'index_' // &
+                 trim(ic_species_names(ic_s)), ic_idx_ptr)
+            if (associated(ic_idx_ptr)) then
+               ic_scalar_idx(ic_s) = ic_idx_ptr
+            else
+               ic_scalar_idx(ic_s) = -1
+               call mpas_log_write('   WARNING: species "' // &
+                    trim(ic_species_names(ic_s)) // '" not in Registry, skipping')
+            end if
+         end do
+
+         ! Interpolate profiles to model levels for each cell
          do iCell = 1, nCells
             do k = 1, nVertLevels
-               ! Height at layer midpoint in km
-               z_km = 0.5e-3 * (zgrid(k,iCell) + zgrid(k+1,iCell))
+               ic_z_km = 0.5e-3_RKIND * (zgrid(k,iCell) + zgrid(k+1,iCell))
 
-               ! US Standard Atmosphere O3 approximation (vmr)
-               if (z_km < 20.0) then
-                  o3_vmr = 30.0e-9 + (z_km / 20.0) * 70.0e-9       ! 30-100 ppbv
-               else if (z_km < 35.0) then
-                  o3_vmr = 100.0e-9 + ((z_km - 20.0) / 15.0) * 7900.0e-9  ! ramp to 8 ppmv
-               else
-                  o3_vmr = 8000.0e-9 * exp(-(z_km - 35.0) / 8.0)   ! exponential decay
-               end if
+               do ic_s = 1, ic_nspecies
+                  if (ic_scalar_idx(ic_s) < 1) cycle
 
-               ! Convert vmr to mmr: mmr = vmr * M_O3 / M_air
-               o3_mmr = o3_vmr * mw_o3 / mw_air
-
-               scalars(index_o3, k, iCell) = o3_mmr
-               scalars(index_o, k, iCell) = 0.0
-               scalars(index_o1d, k, iCell) = 0.0
+                  ! Linear interpolation in height
+                  if (ic_z_km <= ic_heights(1)) then
+                     scalars(ic_scalar_idx(ic_s), k, iCell) = ic_profiles(1, ic_s)
+                  else if (ic_z_km >= ic_heights(ic_nheights)) then
+                     scalars(ic_scalar_idx(ic_s), k, iCell) = &
+                        ic_profiles(ic_nheights, ic_s)
+                  else
+                     do ic_h = 1, ic_nheights - 1
+                        if (ic_z_km >= ic_heights(ic_h) .and. &
+                            ic_z_km < ic_heights(ic_h+1)) then
+                           ic_frac = (ic_z_km - ic_heights(ic_h)) / &
+                                     (ic_heights(ic_h+1) - ic_heights(ic_h))
+                           scalars(ic_scalar_idx(ic_s), k, iCell) = &
+                              ic_profiles(ic_h, ic_s) * (1.0_RKIND - ic_frac) + &
+                              ic_profiles(ic_h+1, ic_s) * ic_frac
+                           exit
+                        end if
+                     end do
+                  end if
+               end do
             end do
          end do
 
-         call mpas_log_write('   O3: analytic stratospheric profile (peak ~8 ppmv at 35 km)')
-         call mpas_log_write('   O, O1D: initialized to zero')
-      end if
-
-      !
-      ! Initialize analytical test species (A, B, C)
-      !
-      call mpas_pool_get_dimension(state, 'index_a', index_a)
-      call mpas_pool_get_dimension(state, 'index_b', index_b)
-      call mpas_pool_get_dimension(state, 'index_c', index_c)
-
-      if (associated(index_a) .and. associated(index_b) .and. associated(index_c)) then
-         call mpas_log_write(' Initializing analytical test species')
-
-         do iCell = 1, nCells
-            do k = 1, nVertLevels
-               scalars(index_a, k, iCell) = 1.0e-6_RKIND   ! 1 ppm background
-               scalars(index_b, k, iCell) = 0.0_RKIND
-               scalars(index_c, k, iCell) = 0.0_RKIND
-            end do
+         ! Log what was initialized
+         do ic_s = 1, ic_nspecies
+            if (ic_scalar_idx(ic_s) > 0) then
+               call mpas_log_write('   ' // trim(ic_species_names(ic_s)) // &
+                                   ': initialized from IC profile')
+            end if
          end do
 
-         call mpas_log_write('   A: uniform background = 1e-6 kg/kg')
-         call mpas_log_write('   B, C: initialized to zero')
+         deallocate(ic_heights, ic_profiles, ic_species_names, ic_scalar_idx)
       end if
+
+ 999  continue
 
    end subroutine init_atm_case_jw
 

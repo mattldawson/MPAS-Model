@@ -6,11 +6,17 @@
 module mpas_chemistry_utils
 
    use mpas_kind_types, only : RKIND
+   use iso_fortran_env, only : real64
 
    implicit none
 
    private
    public :: compute_solar_zenith_angle, compute_earth_sun_distance
+
+   ! Universal physical constants (species-independent)
+   real (kind=real64), parameter, public :: AVOGADRO = 6.02214076e23_real64
+   real (kind=real64), parameter, public :: MW_AIR = 0.029_real64          ! [kg/mol]
+   real (kind=real64), parameter, public :: SCALE_HEIGHT_AIR = 8.01_real64 ! [km]
 
    real (kind=RKIND), parameter :: pi = 3.14159265358979323846_RKIND
    real (kind=RKIND), parameter :: deg2rad = pi / 180.0_RKIND

@@ -320,6 +320,13 @@
                      possible_values="Positive real values"/>
         </nml_record>
 
+        <nml_record name="chemistry" in_defaults="false">
+                <nml_option name="config_chemistry_config_path" type="character" default_value=""
+                     units="-"
+                     description="Path to chemistry mechanism configuration folder (for initial conditions)"
+                     possible_values="Valid directory path (e.g., chemistry_data/chapman_emis_dep)"/>
+        </nml_record>
+
         <nml_record name="io" in_defaults="true">
 
                 <nml_option name="config_pio_num_iotasks" type="integer" default_value="0"
@@ -1189,6 +1196,12 @@
 
                         <var name="o1d" array_group="chapman" units="kg kg^{-1}"
                              description="Excited atomic oxygen O(1D) mass mixing ratio"/>
+
+                        <var name="foo" array_group="emis_dep" units="kg kg^{-1}"
+                             description="Test emitted species"/>
+
+                        <var name="bar" array_group="emis_dep" units="kg kg^{-1}"
+                             description="Test deposited species"/>
 
                         <var name="a" array_group="analytical" units="kg kg^{-1}"
                              description="Analytical test species A"/>

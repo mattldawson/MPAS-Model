@@ -10,8 +10,8 @@ module mpas_chemistry_state
    use iso_fortran_env, only : real64
    use mpas_chemistry_species, only : n_advected, advected_mpas_idx, &
                                        advected_micm_idx, advected_molar_mass, &
-                                       n_constant, constant_micm_idx, constant_vmr, &
-                                       MW_AIR
+                                       n_constant, constant_micm_idx, constant_vmr
+   use mpas_chemistry_utils, only : MW_AIR
 
    implicit none
 

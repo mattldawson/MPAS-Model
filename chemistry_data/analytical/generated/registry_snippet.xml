@@ -1,0 +1,8 @@
+<!-- Auto-generated for mechanism: analytical -->
+<package name="chem_analytical_in"
+         description="Chemistry species for analytical mechanism"/>
+
+<!-- Add these inside the scalars var_array in Registry.xml -->
+<var name="a" array_group="chem_analytical" units="kg kg^{-1}" description="A mass mixing ratio" packages="chem_analytical_in"/>
+<var name="b" array_group="chem_analytical" units="kg kg^{-1}" description="B mass mixing ratio" packages="chem_analytical_in"/>
+<var name="c" array_group="chem_analytical" units="kg kg^{-1}" description="C mass mixing ratio" packages="chem_analytical_in"/>

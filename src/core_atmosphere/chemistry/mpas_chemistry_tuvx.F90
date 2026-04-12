@@ -1,11 +1,14 @@
 ! Copyright (C) 2025 University Corporation for Atmospheric Research
 ! SPDX-License-Identifier: Apache-2.0
 !
-! TUV-x interface for MPAS-A chemistry coupling (Chapman mechanism).
+! TUV-x interface for MPAS-A chemistry coupling.
 ! Creates TUV-x instance with height + wavelength grids and profiles
 ! from MPAS host code, runs per-column photolysis rate calculations.
 ! Follows the CAM-SIMA / atmospheric_physics integration pattern:
 !   grids and profiles are created by the host, not in the JSON config.
+!
+! All gas species profiles are discovered at runtime from MICM species
+! properties (__is_tuvx_profile). No species names appear in this module.
 !
 module mpas_chemistry_tuvx
 
@@ -14,6 +17,7 @@ module mpas_chemistry_tuvx
    use musica_tuvx,      only : tuvx_t, grid_t, profile_t, &
                                 grid_map_t, profile_map_t, radiator_map_t
    use musica_util,      only : error_t, mappings_t
+   use mpas_chemistry_utils, only : AVOGADRO, MW_AIR, SCALE_HEIGHT_AIR
 
    implicit none
 
@@ -27,45 +31,44 @@ module mpas_chemistry_tuvx
    type(grid_t),     pointer :: wavelength_grid            => null()
    type(profile_t),  pointer :: temperature_profile        => null()
    type(profile_t),  pointer :: dry_air_profile            => null()
-   type(profile_t),  pointer :: o2_profile                 => null()
-   type(profile_t),  pointer :: o3_profile                 => null()
    type(profile_t),  pointer :: surface_albedo_profile     => null()
    type(profile_t),  pointer :: et_flux_profile            => null()
    type(mappings_t), pointer :: photo_ordering             => null()
+
+   !> Dynamic array of gas species profile handles
+   type(profile_t), pointer :: gas_profiles(:) => null()
+   integer, save :: n_gas_profiles = 0
 
    integer :: n_photo_rxns = 0
    integer :: n_tuvx_layers = 0    ! = nVertLevels + 1
 
    ! Wavelength grid: 102 bins, 103 edges (120-750 nm)
-   ! Same grid as CAM-SIMA / atmospheric_physics for TUV-x compatibility
    integer, parameter :: N_WAVELENGTH_BINS = 102
 
    ! Conversion constants
    real (kind=real64), parameter :: km_to_cm  = 1.0e5_real64
    real (kind=real64), parameter :: m3_to_cm3 = 1.0e6_real64
-   real (kind=real64), parameter :: avogadro  = 6.02214076e23_real64
    real (kind=real64), parameter :: pi64      = 3.14159265358979323846_real64
-
-   ! Gas species scale heights for exo-layer [km]
-   real (kind=real64), parameter :: SCALE_HEIGHT_AIR = 8.01_real64
-   real (kind=real64), parameter :: SCALE_HEIGHT_O2  = 8.01_real64
-   real (kind=real64), parameter :: SCALE_HEIGHT_O3  = 4.5_real64
 
    ! Max SZA for photolysis calculations [degrees]
    real (kind=real64), parameter :: MAX_SZA_DEG = 110.0_real64
 
-   ! Default surface albedo for JW baroclinic wave test (no land model)
-   real (kind=real64), parameter :: DEFAULT_SURFACE_ALBEDO = 0.1_real64
-
 contains
 
-   !> Initialize TUV-x for Chapman photolysis with MPAS grid.
+   !> Initialize TUV-x for photolysis with MPAS grid.
    !! Creates height + wavelength grids and all profiles from host code,
    !! following the CAM-SIMA / atmospheric_physics integration pattern.
-   subroutine tuvx_setup(config_path, nVertLevels, errmsg, errcode)
+   !! Gas species profiles are created from tuvx_profiles descriptors.
+   subroutine tuvx_setup(config_path, nVertLevels, n_profiles, profile_names, &
+                          surface_albedo, errmsg, errcode)
+
+      use mpas_log, only : mpas_log_write
 
       character(len=*), intent(in)  :: config_path
       integer,          intent(in)  :: nVertLevels
+      integer,          intent(in)  :: n_profiles
+      character(len=64), intent(in) :: profile_names(:)
+      real (kind=real64), intent(in) :: surface_albedo
       character(len=*), intent(out) :: errmsg
       integer,          intent(out) :: errcode
 
@@ -86,6 +89,7 @@ contains
       ! Surface albedo (uniform across wavelength bins)
       real (kind=real64), target :: albedo_edges(N_WAVELENGTH_BINS + 1)
 
+      type(profile_t), pointer :: tmp_profile => null()
       integer :: i
 
       errmsg  = ''
@@ -169,29 +173,25 @@ contains
          errcode = 1; return
       end if
 
-      ! --- O2 profile (on height grid) ---
-      o2_profile => profile_t("O2", "molecule cm-3", height_grid, error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to create O2 profile: ' // error%message()
-         errcode = 1; return
-      end if
-      call profiles%add(o2_profile, error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to add O2 profile: ' // error%message()
-         errcode = 1; return
-      end if
-
-      ! --- O3 profile (on height grid) ---
-      o3_profile => profile_t("O3", "molecule cm-3", height_grid, error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to create O3 profile: ' // error%message()
-         errcode = 1; return
-      end if
-      call profiles%add(o3_profile, error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to add O3 profile: ' // error%message()
-         errcode = 1; return
-      end if
+      ! --- Gas species profiles (generic, from tuvx_profiles descriptors) ---
+      n_gas_profiles = n_profiles
+      allocate(gas_profiles(n_gas_profiles))
+      do i = 1, n_gas_profiles
+         tmp_profile => profile_t(trim(profile_names(i)), "molecule cm-3", &
+                                  height_grid, error)
+         if (.not. error%is_success()) then
+            errmsg = '[CheMPAS] Failed to create gas profile "' &
+                     // trim(profile_names(i)) // '": ' // error%message()
+            errcode = 1; return
+         end if
+         call profiles%add(tmp_profile, error)
+         if (.not. error%is_success()) then
+            errmsg = '[CheMPAS] Failed to add gas profile "' &
+                     // trim(profile_names(i)) // '": ' // error%message()
+            errcode = 1; return
+         end if
+         deallocate(tmp_profile); nullify(tmp_profile)
+      end do
 
       ! --- Surface albedo profile (on wavelength grid) ---
       surface_albedo_profile => profile_t("surface albedo", "none", &
@@ -271,16 +271,15 @@ contains
          errmsg = '[CheMPAS] Failed to get air profile: ' // error%message()
          errcode = 1; return
       end if
-      o2_profile => profiles%get("O2", "molecule cm-3", error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to get O2 profile: ' // error%message()
-         errcode = 1; return
-      end if
-      o3_profile => profiles%get("O3", "molecule cm-3", error)
-      if ((.not. error%is_success())) then
-         errmsg = '[CheMPAS] Failed to get O3 profile: ' // error%message()
-         errcode = 1; return
-      end if
+      do i = 1, n_gas_profiles
+         gas_profiles(i) = profiles%get(trim(profile_names(i)), &
+                                        "molecule cm-3", error)
+         if (.not. error%is_success()) then
+            errmsg = '[CheMPAS] Failed to get gas profile "' &
+                     // trim(profile_names(i)) // '": ' // error%message()
+            errcode = 1; return
+         end if
+      end do
       surface_albedo_profile => profiles%get("surface albedo", "none", error)
       if ((.not. error%is_success())) then
          errmsg = '[CheMPAS] Failed to get surface albedo profile: ' // error%message()
@@ -295,7 +294,7 @@ contains
       deallocate(profiles); nullify(profiles)
 
       ! ===== Set surface albedo (constant for JW test) =====
-      albedo_edges(:) = DEFAULT_SURFACE_ALBEDO
+      albedo_edges(:) = surface_albedo
       call surface_albedo_profile%set_edge_values(albedo_edges, error)
       if ((.not. error%is_success())) then
          errmsg = '[CheMPAS] Failed to set surface albedo: ' // error%message()
@@ -326,21 +325,17 @@ contains
 
 
    !> Run TUV-x for one MPAS column -- compute photolysis rates.
+   !! Gas species profiles are set generically from tuvx_profiles descriptors.
    subroutine tuvx_run_column(nVertLevels, zgrid, temperature, rho_dry, &
-                               o3_mmr, sza, earth_sun_dist,             &
+                               scalars_col, sza, earth_sun_dist,        &
                                photo_rates, errmsg, errcode)
-      use mpas_chemistry_species, only : MW_AIR
-
-      ! Fixed atmospheric constants for TUV-x column setup
-      real (kind=real64), parameter :: MW_O3  = 0.048_real64  ! [kg/mol]
-      real (kind=real64), parameter :: MW_O2  = 0.032_real64  ! [kg/mol]
-      real (kind=real64), parameter :: VMR_O2 = 0.2095_real64 ! volume mixing ratio
+      use mpas_chemistry_species, only : tuvx_profiles, n_tuvx_profiles
 
       integer,             intent(in)  :: nVertLevels
       real (kind=RKIND),   intent(in)  :: zgrid(:)           ! (nVertLevels+1) [m]
       real (kind=RKIND),   intent(in)  :: temperature(:)     ! (nVertLevels) [K]
       real (kind=RKIND),   intent(in)  :: rho_dry(:)         ! (nVertLevels) [kg/m3]
-      real (kind=RKIND),   intent(in)  :: o3_mmr(:)          ! (nVertLevels) [kg/kg]
+      real (kind=RKIND),   intent(in)  :: scalars_col(:,:)   ! (nScalars, nVertLevels)
       real (kind=real64),  intent(in)  :: sza                ! radians
       real (kind=real64),  intent(in)  :: earth_sun_dist     ! AU
       real (kind=real64),  intent(out) :: photo_rates(:,:)   ! (nVertLevels, n_photo_rxns)
@@ -362,9 +357,9 @@ contains
       real (kind=real64) :: zmid_km(nVertLevels)
       real (kind=real64) :: zint_km(nVertLevels + 1)
       real (kind=real64) :: sza_deg
-      real (kind=RKIND)  :: ones(nVertLevels), vmr_o2_arr(nVertLevels)
+      real (kind=RKIND)  :: ones(nVertLevels), mmr_col(nVertLevels)
       type(error_t) :: error
-      integer :: k
+      integer :: k, ip
 
       errmsg  = ''
       errcode = 0
@@ -436,19 +431,23 @@ contains
                            SCALE_HEIGHT_AIR, .false., errmsg, errcode)
       if (errcode /= 0) return
 
-      ! O2: convert VMR to MMR then use standard formula
-      ! MMR = VMR * MW_species / MW_air
-      vmr_o2_arr(:) = real(VMR_O2 * MW_O2 / MW_AIR, RKIND)
-      call set_gas_profile(o2_profile, nVertLevels, rho_dry, &
-                           vmr_o2_arr, MW_O2, height_deltas, &
-                           SCALE_HEIGHT_O2, .false., errmsg, errcode)
-      if (errcode /= 0) return
-
-      ! O3: from MPAS scalars
-      call set_gas_profile(o3_profile, nVertLevels, rho_dry, &
-                           o3_mmr, MW_O3, height_deltas, &
-                           SCALE_HEIGHT_O3, .true., errmsg, errcode)
-      if (errcode /= 0) return
+      ! Gas species profiles (generic loop over tuvx_profiles)
+      do ip = 1, n_tuvx_profiles
+         if (tuvx_profiles(ip)%constant_vmr > 0.0_real64) then
+            ! Constant species: derive MMR = constant_vmr * species_mw / mw_air
+            mmr_col(:) = real(tuvx_profiles(ip)%constant_vmr &
+                       * tuvx_profiles(ip)%molecular_weight / MW_AIR, RKIND)
+         else
+            ! Advected species: extract from MPAS scalars column
+            mmr_col(:) = scalars_col(tuvx_profiles(ip)%mpas_idx, 1:nVertLevels)
+         end if
+         call set_gas_profile(gas_profiles(ip), nVertLevels, rho_dry, &
+                              mmr_col, tuvx_profiles(ip)%molecular_weight, &
+                              height_deltas, tuvx_profiles(ip)%scale_height, &
+                              tuvx_profiles(ip)%use_arithmetic_mean, &
+                              errmsg, errcode)
+         if (errcode /= 0) return
+      end do
 
       ! Run TUV-x
       photo_out(:,:)   = 0.0_real64
@@ -472,7 +471,8 @@ contains
    !> Set a gas species profile from MPAS data.
    !! Converts mmr -> molecule/cm3 edge values and column densities.
    subroutine set_gas_profile(prof, nVertLevels, rho_dry, mmr, molar_mass, &
-                               height_deltas, scale_height, is_o3, errmsg, errcode)
+                               height_deltas, scale_height, use_arithmetic_mean, &
+                               errmsg, errcode)
 
       type(profile_t),    intent(inout) :: prof
       integer,            intent(in)    :: nVertLevels
@@ -481,7 +481,7 @@ contains
       real (kind=real64), intent(in)    :: molar_mass       ! [kg/mol]
       real (kind=real64), intent(in)    :: height_deltas(:) ! (nVertLevels+1) [km]
       real (kind=real64), intent(in)    :: scale_height     ! [km]
-      logical,            intent(in)    :: is_o3
+      logical,            intent(in)    :: use_arithmetic_mean
       character(len=*),   intent(out)   :: errmsg
       integer,            intent(out)   :: errcode
 
@@ -498,7 +498,7 @@ contains
       ! n [molec/cm3] = mmr * rho [kg/m3] / M [kg/mol] * N_A / 1e6
       do k = 1, nVertLevels
          conc(k) = real(mmr(k), real64) * real(rho_dry(k), real64) &
-                 / molar_mass * avogadro / m3_to_cm3
+                 / molar_mass * AVOGADRO / m3_to_cm3
       end do
 
       ! Edge values (surface-to-top, no inversion)
@@ -509,7 +509,7 @@ contains
       edges(nVertLevels+2) = conc(nVertLevels)
 
       ! Layer column densities [molecule/cm2]
-      if (is_o3) then
+      if (use_arithmetic_mean) then
          ! Arithmetic mean (better for rapidly varying species)
          do k = 1, nVertLevels + 1
             densities(k) = height_deltas(k) * km_to_cm * &
@@ -563,12 +563,10 @@ contains
       if (associated(dry_air_profile)) then
          deallocate(dry_air_profile); nullify(dry_air_profile)
       end if
-      if (associated(o2_profile)) then
-         deallocate(o2_profile); nullify(o2_profile)
+      if (associated(gas_profiles)) then
+         deallocate(gas_profiles); nullify(gas_profiles)
       end if
-      if (associated(o3_profile)) then
-         deallocate(o3_profile); nullify(o3_profile)
-      end if
+      n_gas_profiles = 0
       if (associated(surface_albedo_profile)) then
          deallocate(surface_albedo_profile); nullify(surface_albedo_profile)
       end if

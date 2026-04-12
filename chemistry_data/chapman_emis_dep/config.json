@@ -12,7 +12,10 @@
       "name": "O2",
       "molecular weight [kg mol-1]": 0.0319988,
       "__absolute tolerance": 1e-12,
-      "__mpas_constant_vmr": 0.2095
+      "__mpas_constant_vmr": 0.2095,
+      "__is_tuvx_profile": "O2",
+      "__tuvx_scale_height [km]": 8.01,
+      "__tuvx_column_density_method": "geometric"
     },
     {
       "name": "M",
@@ -21,28 +24,36 @@
     {
       "name": "O3",
       "molecular weight [kg mol-1]": 0.0479982,
-      "__absolute tolerance": 1e-12
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true,
+      "__is_tuvx_profile": "O3",
+      "__tuvx_scale_height [km]": 4.5,
+      "__tuvx_column_density_method": "arithmetic"
     },
     {
       "name": "O",
       "molecular weight [kg mol-1]": 0.0159994,
-      "__absolute tolerance": 1e-12
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true
     },
     {
       "name": "O1D",
       "molecular weight [kg mol-1]": 0.0159994,
-      "__absolute tolerance": 1e-12
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true
     },
     {
       "name": "foo",
       "molecular weight [kg mol-1]": 0.028,
       "__absolute tolerance": 1e-12,
+      "__is_advected": true,
       "__mpas_surface_emission_flux [molec cm-2 s-1]": 1e12
     },
     {
       "name": "bar",
       "molecular weight [kg mol-1]": 0.044,
       "__absolute tolerance": 1e-12,
+      "__is_advected": true,
       "__mpas_surface_emission_flux [molec cm-2 s-1]": 5e11,
       "__mpas_surface_deposition_velocity [cm s-1]": 1.0
     }
