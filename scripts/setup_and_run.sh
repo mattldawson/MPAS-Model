@@ -78,11 +78,13 @@ else
         printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/physics/checkout_data_files.sh
         chmod +x src/core_atmosphere/physics/checkout_data_files.sh
 
-        make -j$(nproc) gnu CORE=init_atmosphere USE_PIO2=false
-        make clean CORE=atmosphere
+        # Build atmosphere core first (needs MUSICA flags)
         make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
             MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
             MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
+        # Build init_atmosphere core (AUTOCLEAN lets it re-compile the
+        # shared framework that was built with different options above)
+        make -j$(nproc) gnu CORE=init_atmosphere USE_PIO2=false AUTOCLEAN=true
     '
 fi
 
