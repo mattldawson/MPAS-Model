@@ -132,6 +132,9 @@ module atm_core_interface
       logical, pointer :: config_ugwp_diags
       character(len=StrKIND) :: attvalue
       integer :: local_ierr
+      character(len=StrKIND), pointer :: config_chemistry_mechanism
+      logical, pointer :: chem_chapman_inActive
+      logical, pointer :: chem_analytical_inActive
 
 
       ierr = atm_setup_packages_when(configs, packages)
@@ -203,6 +206,34 @@ module atm_core_interface
       else
          ierr = ierr + 1
          call mpas_log_write("Package setup failed for 'no_invariant_stream'. 'no_invariant_stream' is not a package.", &
+                             messageType=MPAS_LOG_ERR)
+      end if
+
+      !
+      ! Chemistry mechanism species packages
+      !
+      nullify(config_chemistry_mechanism)
+      call mpas_pool_get_config(configs, 'config_chemistry_mechanism', config_chemistry_mechanism)
+
+      nullify(chem_chapman_inActive)
+      call mpas_pool_get_package(packages, 'chem_chapman_inActive', chem_chapman_inActive)
+
+      nullify(chem_analytical_inActive)
+      call mpas_pool_get_package(packages, 'chem_analytical_inActive', chem_analytical_inActive)
+
+      if (associated(config_chemistry_mechanism) .and. &
+          associated(chem_chapman_inActive) .and. &
+          associated(chem_analytical_inActive)) then
+         chem_chapman_inActive = .false.
+         chem_analytical_inActive = .false.
+         if (trim(config_chemistry_mechanism) == 'chapman') then
+            chem_chapman_inActive = .true.
+         else if (trim(config_chemistry_mechanism) == 'analytical') then
+            chem_analytical_inActive = .true.
+         end if
+      else
+         ierr = ierr + 1
+         call mpas_log_write('Package setup failed for chemistry mechanism packages', &
                              messageType=MPAS_LOG_ERR)
       end if
 

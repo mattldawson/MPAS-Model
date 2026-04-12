@@ -5,13 +5,24 @@
 #   - init_atmosphere_model and atmosphere_model built
 #   - 480-km mesh downloaded (scripts/download_data.sh)
 #
-# Usage: ./scripts/run_jw_test.sh [NPROCS]
-#   NPROCS: number of MPI ranks (default: 1)
+# Usage: ./scripts/run_jw_test.sh [NPROCS] [MECHANISM]
+#   NPROCS:    number of MPI ranks (default: 1)
+#   MECHANISM: chemistry mechanism — "chapman" or "analytical" (default: chapman)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NPROCS="${1:-1}"
+MECHANISM="${2:-chapman}"
+
+# Validate mechanism
+case "${MECHANISM}" in
+    chapman|analytical) ;;
+    *)
+        echo "ERROR: Unknown mechanism '${MECHANISM}'. Use 'chapman' or 'analytical'." >&2
+        exit 1
+        ;;
+esac
 
 # Verify executables exist
 for exe in init_atmosphere_model atmosphere_model; do
@@ -35,7 +46,7 @@ rm -rf "${WORK_DIR}"
 mkdir -p "${WORK_DIR}"
 cd "${WORK_DIR}"
 
-echo "=== Setting up JW baroclinic wave test (480-km, ${NPROCS} MPI ranks) ==="
+echo "=== Setting up JW baroclinic wave test (480-km, ${NPROCS} MPI ranks, ${MECHANISM}) ==="
 
 # Link executables and mesh
 ln -sf "${MPAS_DIR}/init_atmosphere_model" .
@@ -49,16 +60,18 @@ done
 
 # Link chemistry configuration data
 cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
-# TUV-x data files: use MUSICA source tree data if available, else the installed data
-MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
-if [ -d "${MUSICA_DATA}" ]; then
-    mkdir -p chemistry_data/chapman/tuvx/data
-    ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
-elif [ -d "/usr/local/share/musica/tuvx_data" ]; then
-    mkdir -p chemistry_data/chapman/tuvx/data
-    ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
-else
-    echo "WARNING: TUV-x data files not found. Chemistry may fail." >&2
+# TUV-x data files: only needed for chapman mechanism
+if [ "${MECHANISM}" = "chapman" ]; then
+    MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
+    if [ -d "${MUSICA_DATA}" ]; then
+        mkdir -p chemistry_data/chapman/tuvx/data
+        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
+    elif [ -d "/usr/local/share/musica/tuvx_data" ]; then
+        mkdir -p chemistry_data/chapman/tuvx/data
+        ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
+    else
+        echo "WARNING: TUV-x data files not found. Chapman chemistry may fail." >&2
+    fi
 fi
 
 # ---- Create init namelist ----
@@ -133,7 +146,16 @@ echo "  init_atmosphere_model succeeded"
 
 # ---- Create atmosphere namelist ----
 # 480-km mesh: dt ~ 1800s (scale from 120-km=450s by ratio 480/120=4)
-cat > namelist.atmosphere << 'EOF'
+# Chemistry settings depend on selected mechanism
+if [ "${MECHANISM}" = "chapman" ]; then
+    TUVX_CONFIG="chemistry_data/chapman/tuvx/config.json"
+    TUVX_MAPPING="chemistry_data/chapman/tuvx_micm_mapping.json"
+elif [ "${MECHANISM}" = "analytical" ]; then
+    TUVX_CONFIG=""
+    TUVX_MAPPING=""
+fi
+
+cat > namelist.atmosphere << EOF
 &nhyd_model
     config_dt = 1800.0
     config_start_time = '0000-01-01_00:00:00'
@@ -204,9 +226,10 @@ cat > namelist.atmosphere << 'EOF'
 &chemistry
     config_chemistry_enabled = .true.
     config_chemistry_dt = 60.0
-    config_micm_config_path = 'chemistry_data/chapman/micm/config.json'
-    config_tuvx_config_path = 'chemistry_data/chapman/tuvx/config.json'
-    config_tuvx_micm_mapping_path = 'chemistry_data/chapman/tuvx_micm_mapping.json'
+    config_chemistry_mechanism = '${MECHANISM}'
+    config_micm_config_path = 'chemistry_data/${MECHANISM}/micm/config.json'
+    config_tuvx_config_path = '${TUVX_CONFIG}'
+    config_tuvx_micm_mapping_path = '${TUVX_MAPPING}'
 /
 EOF
 
@@ -274,7 +297,7 @@ touch stream_list.atmosphere.diagnostics
 touch stream_list.atmosphere.diag_ugwp
 
 # ---- Run atmosphere_model ----
-echo "=== Running JW baroclinic wave (1 day, 480-km mesh) ==="
+echo "=== Running JW baroclinic wave (1 day, 480-km mesh, ${MECHANISM} chemistry) ==="
 mpirun ${MPIRUN_OPTS} ./atmosphere_model
 echo ""
 
@@ -292,6 +315,6 @@ fi
 
 echo "  atmosphere_model succeeded"
 echo ""
-echo "=== JW baroclinic wave test PASSED ==="
+echo "=== JW baroclinic wave test PASSED (${MECHANISM}) ==="
 echo "  Output: ${WORK_DIR}/output.nc"
 ls -lh output.nc

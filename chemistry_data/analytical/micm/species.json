@@ -1,0 +1,22 @@
+{
+  "camp-data": [
+    {
+      "name": "A",
+      "type": "CHEM_SPEC",
+      "absolute tolerance": 1e-12,
+      "molecular weight [kg mol-1]": 0.028
+    },
+    {
+      "name": "B",
+      "type": "CHEM_SPEC",
+      "absolute tolerance": 1e-12,
+      "molecular weight [kg mol-1]": 0.028
+    },
+    {
+      "name": "C",
+      "type": "CHEM_SPEC",
+      "absolute tolerance": 1e-12,
+      "molecular weight [kg mol-1]": 0.028
+    }
+  ]
+}

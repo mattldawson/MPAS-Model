@@ -1,8 +1,8 @@
 ! Copyright (C) 2025 University Corporation for Atmospheric Research
 ! SPDX-License-Identifier: Apache-2.0
 !
-! Chemistry driver for MPAS-A: initializes MICM + TUV-x and orchestrates
-! per-timestep photolysis and chemical kinetics for Chapman mechanism.
+! Mechanism-agnostic chemistry driver for MPAS-A.
+! Discovers species from MICM at init-time; TUV-x is optional.
 !
 module mpas_chemistry_driver
 
@@ -16,13 +16,16 @@ module mpas_chemistry_driver
                                    MPAS_Time_type
    use iso_fortran_env,     only : real64
 
-   use mpas_chemistry_micm, only : micm_setup, micm_solve, micm_cleanup, &
-                                   micm_state
-   use mpas_chemistry_tuvx, only : tuvx_setup, tuvx_run_column, tuvx_cleanup, &
-                                   n_photo_rxns, photo_ordering
-   use mpas_chemistry_utils, only : compute_solar_zenith_angle, &
-                                    compute_earth_sun_distance
-   use mpas_chemistry_state, only : update_micm_from_mpas, update_mpas_from_micm
+   use mpas_chemistry_micm,    only : micm_setup, micm_solve, micm_cleanup, &
+                                      micm_state, micm_solver_ptr
+   use mpas_chemistry_utils,   only : compute_solar_zenith_angle, &
+                                      compute_earth_sun_distance
+   use mpas_chemistry_state,   only : update_micm_from_mpas, update_mpas_from_micm
+   use mpas_chemistry_species, only : chem_species_init, chem_species_cleanup, &
+                                      n_advected, advected_mpas_idx, &
+                                      advected_micm_idx, advected_molar_mass, &
+                                      n_constant, constant_micm_idx, constant_vmr, &
+                                      tuvx_o3_mpas_idx, MW_AIR
 
    implicit none
 
@@ -31,23 +34,13 @@ module mpas_chemistry_driver
 
    ! Module-level state
    logical, save :: chemistry_enabled = .false.
+   logical, save :: tuvx_enabled = .false.
    real (kind=real64), save :: chem_dt = 0.0_real64
-
-   ! MPAS scalar indices for Chapman species
-   integer, save :: idx_o3  = 0
-   integer, save :: idx_o   = 0
-   integer, save :: idx_o1d = 0
-
-   ! MICM species indices (1-based Fortran)
-   integer, save :: micm_idx_o3  = 0
-   integer, save :: micm_idx_o   = 0
-   integer, save :: micm_idx_o1d = 0
-   integer, save :: micm_idx_o2  = 0
-   integer, save :: micm_idx_n2  = 0
 
    ! Photolysis mapping: photo_mapping(r) = MICM rate_parameters index
    ! for TUV-x photolysis reaction r
    integer, allocatable, save :: photo_mapping(:)
+   integer, save :: n_photo_rxns_local = 0
 
    ! R_v / R_d for temperature from moist potential temperature
    real (kind=RKIND), parameter :: rvord = 461.51_RKIND / 287.04_RKIND
@@ -71,7 +64,6 @@ contains
 
       character(len=512) :: errmsg
       integer :: errcode, r, n_grid_cells
-      integer, pointer :: idx_ptr
       type(error_t) :: error
 
       call mpas_pool_get_config(domain % blocklist % configs, &
@@ -103,18 +95,6 @@ contains
 
       n_grid_cells = nCellsSolve * nVertLevels
 
-      ! Get MPAS scalar indices for Chapman species
-      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
-      call mpas_pool_get_dimension(state, 'index_o3', idx_ptr)
-      idx_o3 = idx_ptr
-      call mpas_pool_get_dimension(state, 'index_o', idx_ptr)
-      idx_o = idx_ptr
-      call mpas_pool_get_dimension(state, 'index_o1d', idx_ptr)
-      idx_o1d = idx_ptr
-
-      call mpas_log_write('[CheMPAS] MPAS scalar indices: O3=$i, O=$i, O1D=$i', &
-                          intArgs=(/idx_o3, idx_o, idx_o1d/))
-
       ! --- Setup MICM ---
       call micm_setup(trim(config_micm_config_path), n_grid_cells, errmsg, errcode)
       if (errcode /= 0) then
@@ -122,44 +102,39 @@ contains
          return
       end if
 
-      ! Get MICM species indices
-      micm_idx_o3  = micm_state%species_ordering%index('O3', error)
-      micm_idx_o   = micm_state%species_ordering%index('O', error)
-      micm_idx_o1d = micm_state%species_ordering%index('O1D', error)
-      micm_idx_o2  = micm_state%species_ordering%index('O2', error)
-      micm_idx_n2  = micm_state%species_ordering%index('N2', error)
-
-      call mpas_log_write('[CheMPAS] MICM species: O3=$i O=$i O1D=$i O2=$i N2=$i', &
-                          intArgs=(/micm_idx_o3, micm_idx_o, micm_idx_o1d, &
-                                    micm_idx_o2, micm_idx_n2/))
       call mpas_log_write('[CheMPAS] MICM: $i species, $i rate params, $i grid cells', &
                           intArgs=(/micm_state%number_of_species, &
                                     micm_state%number_of_rate_parameters, &
                                     micm_state%number_of_grid_cells/))
 
-      ! --- Setup TUV-x ---
-      call tuvx_setup(trim(config_tuvx_config_path), nVertLevels, errmsg, errcode)
+      ! --- Discover species from MICM ---
+      call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
+      call chem_species_init(state, micm_solver_ptr, micm_state, errmsg, errcode)
       if (errcode /= 0) then
          call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
          return
       end if
 
-      call mpas_log_write('[CheMPAS] TUV-x: $i photolysis reactions', &
-                          intArgs=(/n_photo_rxns/))
-
-      ! --- Build photolysis mapping ---
-      ! Convention: MICM rate parameters named "PHOTO.<tuvx_reaction_name>"
-      allocate(photo_mapping(n_photo_rxns))
-      do r = 1, n_photo_rxns
-         photo_mapping(r) = micm_state%rate_parameters_ordering%index( &
-            'PHOTO.' // trim(photo_ordering%name(r)), error)
-         if ((.not. error%is_success())) then
-            call mpas_log_write('[CheMPAS] Cannot map photo rxn $i: ' // &
-                                error%message(), intArgs=(/r/), &
-                                messageType=MPAS_LOG_CRIT)
+      ! --- Setup TUV-x (optional) ---
+      tuvx_enabled = (len_trim(config_tuvx_config_path) > 0)
+      if (tuvx_enabled) then
+         call tuvx_init(config_tuvx_config_path, nVertLevels, errmsg, errcode)
+         if (errcode /= 0) then
+            call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
             return
          end if
-      end do
+
+         ! Build photolysis mapping: TUV-x reaction name → MICM rate param index
+         call build_photo_mapping(errmsg, errcode)
+         if (errcode /= 0) then
+            call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
+            return
+         end if
+      else
+         call mpas_log_write('[CheMPAS] TUV-x disabled (no config path)')
+         n_photo_rxns_local = 0
+         allocate(photo_mapping(0))
+      end if
 
       if (chem_dt <= 0.0_real64) then
          call mpas_log_write('[CheMPAS] config_chemistry_dt <= 0; using dynamics dt')
@@ -168,6 +143,55 @@ contains
       call mpas_log_write('[CheMPAS] Chemistry initialization complete')
 
    end subroutine chemistry_init
+
+
+   !> Initialize TUV-x subsystem.
+   subroutine tuvx_init(config_path, nVertLevels, errmsg, errcode)
+
+      use mpas_chemistry_tuvx, only : tuvx_setup, n_photo_rxns, photo_ordering
+
+      character(len=StrKIND), pointer, intent(in) :: config_path
+      integer, pointer, intent(in) :: nVertLevels
+      character(len=*), intent(out) :: errmsg
+      integer, intent(out) :: errcode
+
+      call tuvx_setup(trim(config_path), nVertLevels, errmsg, errcode)
+      if (errcode /= 0) return
+
+      n_photo_rxns_local = n_photo_rxns
+      call mpas_log_write('[CheMPAS] TUV-x: $i photolysis reactions', &
+                          intArgs=(/n_photo_rxns_local/))
+
+   end subroutine tuvx_init
+
+
+   !> Build photolysis rate mapping: TUV-x ordering → MICM rate_parameters.
+   subroutine build_photo_mapping(errmsg, errcode)
+
+      use musica_util, only : error_t
+      use mpas_chemistry_tuvx, only : n_photo_rxns, photo_ordering
+
+      character(len=*), intent(out) :: errmsg
+      integer, intent(out) :: errcode
+
+      type(error_t) :: error
+      integer :: r
+
+      errmsg  = ''
+      errcode = 0
+
+      allocate(photo_mapping(n_photo_rxns))
+      do r = 1, n_photo_rxns
+         photo_mapping(r) = micm_state%rate_parameters_ordering%index( &
+            'PHOTO.' // trim(photo_ordering%name(r)), error)
+         if (.not. error%is_success()) then
+            errmsg = '[CheMPAS] Cannot map photo rxn ' // trim(photo_ordering%name(r)) &
+                     // ': ' // error%message()
+            errcode = 1; return
+         end if
+      end do
+
+   end subroutine build_photo_mapping
 
 
    !> Run one chemistry timestep — called every dynamics timestep.
@@ -263,7 +287,7 @@ contains
          allocate(temp_2d(nVertLevels, nCellsSolve))
          allocate(pres_2d(nVertLevels, nCellsSolve))
          allocate(rho_2d(nVertLevels, nCellsSolve))
-         allocate(photo_all(nVertLevels, nCellsSolve, n_photo_rxns))
+         allocate(photo_all(nVertLevels, nCellsSolve, max(n_photo_rxns_local, 1)))
 
          do iCell = 1, nCellsSolve
             do k = 1, nVertLevels
@@ -281,38 +305,21 @@ contains
             end do
          end do
 
-         ! === Phase 1: TUV-x photolysis for each column ===
+         ! === Phase 1: TUV-x photolysis (if enabled) ===
          photo_all(:,:,:) = 0.0_real64
 
-         do iCell = 1, nCellsSolve
-            sza = compute_solar_zenith_angle(latCell(iCell), lonCell(iCell), &
-                                              julday, ut_hours)
-            sza_r64 = real(sza, real64)
-
-            o3_col(1:nVertLevels)      = scalars(idx_o3, 1:nVertLevels, iCell)
-            rho_col(1:nVertLevels)     = rho_2d(1:nVertLevels, iCell)
-            zgrid_col(1:nVertLevels+1) = zgrid(1:nVertLevels+1, iCell)
-
-            call tuvx_run_column(nVertLevels, zgrid_col, temp_2d(:,iCell), &
-                                  rho_col, o3_col, sza_r64, earth_sun_r64, &
-                                  photo_col, errmsg, errcode)
-            if (errcode /= 0) then
-               call mpas_log_write('[CheMPAS] TUV-x error cell $i: ' // &
-                                   trim(errmsg), intArgs=(/iCell/))
-            else
-               photo_all(1:nVertLevels, iCell, 1:n_photo_rxns) = &
-                  photo_col(1:nVertLevels, 1:n_photo_rxns)
-            end if
-         end do
+         if (tuvx_enabled .and. n_photo_rxns_local > 0) then
+            call run_tuvx_photolysis(nCellsSolve, nVertLevels, scalars, &
+                                     rho_2d, zgrid, latCell, lonCell, &
+                                     julday, ut_hours, earth_sun_r64, &
+                                     photo_all)
+         end if
 
          ! === Phase 2: Fill MICM state from MPAS ===
          call update_micm_from_mpas(nCellsSolve, nVertLevels, scalars,         &
                                      temp_2d, pres_2d, rho_2d,                 &
                                      photo_all,                                &
-                                     idx_o3, idx_o, idx_o1d,                   &
-                                     micm_idx_o3, micm_idx_o, micm_idx_o1d,   &
-                                     micm_idx_o2, micm_idx_n2,                &
-                                     n_photo_rxns, photo_mapping,             &
+                                     n_photo_rxns_local, photo_mapping,        &
                                      micm_state%conditions,                    &
                                      micm_state%concentrations,                &
                                      micm_state%rate_parameters,               &
@@ -332,8 +339,6 @@ contains
          ! === Phase 4: Copy results back to MPAS ===
          call update_mpas_from_micm(nCellsSolve, nVertLevels, scalars,         &
                                      rho_2d,                                    &
-                                     idx_o3, idx_o, idx_o1d,                    &
-                                     micm_idx_o3, micm_idx_o, micm_idx_o1d,    &
                                      micm_state%concentrations,                 &
                                      micm_state%species_strides%grid_cell,      &
                                      micm_state%species_strides%variable,       &
@@ -347,14 +352,72 @@ contains
    end subroutine chemistry_timestep
 
 
+   !> Run TUV-x photolysis for all columns.
+   subroutine run_tuvx_photolysis(nCellsSolve, nVertLevels, scalars, &
+                                   rho_2d, zgrid, latCell, lonCell, &
+                                   julday, ut_hours, earth_sun_r64, &
+                                   photo_all)
+
+      use mpas_chemistry_tuvx, only : tuvx_run_column
+
+      integer, intent(in) :: nCellsSolve, nVertLevels
+      real (kind=RKIND), intent(in) :: scalars(:,:,:)
+      real (kind=RKIND), intent(in) :: rho_2d(:,:)
+      real (kind=RKIND), intent(in) :: zgrid(:,:)
+      real (kind=RKIND), intent(in) :: latCell(:), lonCell(:)
+      integer, intent(in) :: julday
+      real (kind=RKIND), intent(in) :: ut_hours
+      real (kind=real64), intent(in) :: earth_sun_r64
+      real (kind=real64), intent(inout) :: photo_all(:,:,:)
+
+      real (kind=RKIND)  :: o3_col(200), zgrid_col(201), rho_col(200)
+      real (kind=real64) :: photo_col(200, 10)
+      real (kind=real64) :: sza_r64
+      real (kind=RKIND)  :: sza
+      character(len=512) :: errmsg
+      integer :: errcode, iCell, k
+
+      do iCell = 1, nCellsSolve
+         sza = compute_solar_zenith_angle(latCell(iCell), lonCell(iCell), &
+                                           julday, ut_hours)
+         sza_r64 = real(sza, real64)
+
+         ! Get O3 column for TUV-x (if O3 exists in mechanism)
+         if (tuvx_o3_mpas_idx > 0) then
+            o3_col(1:nVertLevels) = scalars(tuvx_o3_mpas_idx, 1:nVertLevels, iCell)
+         else
+            o3_col(1:nVertLevels) = 0.0_RKIND
+         end if
+
+         rho_col(1:nVertLevels)     = rho_2d(1:nVertLevels, iCell)
+         zgrid_col(1:nVertLevels+1) = zgrid(1:nVertLevels+1, iCell)
+
+         call tuvx_run_column(nVertLevels, zgrid_col, rho_col, &
+                               rho_col, o3_col, sza_r64, earth_sun_r64, &
+                               photo_col, errmsg, errcode)
+         if (errcode /= 0) then
+            call mpas_log_write('[CheMPAS] TUV-x error cell $i: ' // &
+                                trim(errmsg), intArgs=(/iCell/))
+         else
+            photo_all(1:nVertLevels, iCell, 1:n_photo_rxns_local) = &
+               photo_col(1:nVertLevels, 1:n_photo_rxns_local)
+         end if
+      end do
+
+   end subroutine run_tuvx_photolysis
+
+
    !> Finalize chemistry — called at model shutdown.
    subroutine chemistry_finalize()
+
+      use mpas_chemistry_tuvx, only : tuvx_cleanup
 
       if (.not. chemistry_enabled) return
 
       call mpas_log_write('[CheMPAS] Finalizing chemistry...')
       call micm_cleanup()
-      call tuvx_cleanup()
+      if (tuvx_enabled) call tuvx_cleanup()
+      call chem_species_cleanup()
       if (allocated(photo_mapping)) deallocate(photo_mapping)
       chemistry_enabled = .false.
       call mpas_log_write('[CheMPAS] Chemistry finalized')

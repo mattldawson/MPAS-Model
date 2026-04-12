@@ -419,6 +419,11 @@
                      units="-"
                      description="Path to TUV-x to MICM photolysis mapping file"
                      possible_values="Valid file path"/>
+
+                <nml_option name="config_chemistry_mechanism" type="character" default_value=""
+                     units="-"
+                     description="Chemistry mechanism name for package activation (e.g., chapman, analytical)"
+                     possible_values="chapman, analytical, or empty string"/>
         </nml_record>
 
 <!-- **************************************************************************************** -->
@@ -444,6 +449,9 @@
                 <package name="ugwp_orog_stream" description="Input stream (and variables) for UGWP orography"/>
                 <package name="ugwp_ngw_stream"  description="Input stream (and variables) for UGWP NGW lookup table"/>
                 <package name="ugwp_diags_stream" description="Output stream (and variables) for UGWP output diagnostics"/>
+
+                <package name="chem_chapman_in" description="Chapman chemistry species (O3, O, O1D)"/>
+                <package name="chem_analytical_in" description="Analytical test chemistry species (A, B, C)"/>
         </packages>
 
 
@@ -1711,13 +1719,28 @@
                              description="Passive tracer 3: Surface-concentrated for vertical advection testing"/>
 
                         <var name="o3" array_group="chapman" units="kg kg^{-1}"
-                             description="Ozone mass mixing ratio"/>
+                             description="Ozone mass mixing ratio"
+                             packages="chem_chapman_in"/>
 
                         <var name="o" array_group="chapman" units="kg kg^{-1}"
-                             description="Atomic oxygen mass mixing ratio"/>
+                             description="Atomic oxygen mass mixing ratio"
+                             packages="chem_chapman_in"/>
 
                         <var name="o1d" array_group="chapman" units="kg kg^{-1}"
-                             description="Excited atomic oxygen O(1D) mass mixing ratio"/>
+                             description="Excited atomic oxygen O(1D) mass mixing ratio"
+                             packages="chem_chapman_in"/>
+
+                        <var name="a" array_group="analytical" units="kg kg^{-1}"
+                             description="Analytical test species A"
+                             packages="chem_analytical_in"/>
+
+                        <var name="b" array_group="analytical" units="kg kg^{-1}"
+                             description="Analytical test species B"
+                             packages="chem_analytical_in"/>
+
+                        <var name="c" array_group="analytical" units="kg kg^{-1}"
+                             description="Analytical test species C"
+                             packages="chem_analytical_in"/>
                 </var_array>
 #endif
 
@@ -2080,13 +2103,28 @@
                              description="Tendency of passive tracer 3 mass per unit volume divided by d(zeta)/dz"/>
 
                         <var name="tend_o3" name_in_code="o3" array_group="chapman" units="kg m^{-3} s^{-1}"
-                             description="Tendency of ozone mass per unit volume divided by d(zeta)/dz"/>
+                             description="Tendency of ozone mass per unit volume divided by d(zeta)/dz"
+                             packages="chem_chapman_in"/>
 
                         <var name="tend_o" name_in_code="o" array_group="chapman" units="kg m^{-3} s^{-1}"
-                             description="Tendency of atomic oxygen mass per unit volume divided by d(zeta)/dz"/>
+                             description="Tendency of atomic oxygen mass per unit volume divided by d(zeta)/dz"
+                             packages="chem_chapman_in"/>
 
                         <var name="tend_o1d" name_in_code="o1d" array_group="chapman" units="kg m^{-3} s^{-1}"
-                             description="Tendency of excited atomic oxygen O(1D) mass per unit volume divided by d(zeta)/dz"/>
+                             description="Tendency of excited atomic oxygen O(1D) mass per unit volume divided by d(zeta)/dz"
+                             packages="chem_chapman_in"/>
+
+                        <var name="tend_a" name_in_code="a" array_group="analytical" units="kg m^{-3} s^{-1}"
+                             description="Tendency of analytical test species A"
+                             packages="chem_analytical_in"/>
+
+                        <var name="tend_b" name_in_code="b" array_group="analytical" units="kg m^{-3} s^{-1}"
+                             description="Tendency of analytical test species B"
+                             packages="chem_analytical_in"/>
+
+                        <var name="tend_c" name_in_code="c" array_group="analytical" units="kg m^{-3} s^{-1}"
+                             description="Tendency of analytical test species C"
+                             packages="chem_analytical_in"/>
                 </var_array>
 #endif
         </var_struct>
@@ -2180,15 +2218,33 @@
 
                         <var name="lbc_o3" name_in_code="o3" array_group="chapman"
                              units="kg kg^{-1} s^{-1}"
-                             description="Lateral boundary tendency of ozone"/>
+                             description="Lateral boundary tendency of ozone"
+                             packages="chem_chapman_in"/>
 
                         <var name="lbc_o" name_in_code="o" array_group="chapman"
                              units="kg kg^{-1} s^{-1}"
-                             description="Lateral boundary tendency of atomic oxygen"/>
+                             description="Lateral boundary tendency of atomic oxygen"
+                             packages="chem_chapman_in"/>
 
                         <var name="lbc_o1d" name_in_code="o1d" array_group="chapman"
                              units="kg kg^{-1} s^{-1}"
-                             description="Lateral boundary tendency of excited atomic oxygen O(1D)"/>
+                             description="Lateral boundary tendency of excited atomic oxygen O(1D)"
+                             packages="chem_chapman_in"/>
+
+                        <var name="lbc_a" name_in_code="a" array_group="analytical"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of analytical test species A"
+                             packages="chem_analytical_in"/>
+
+                        <var name="lbc_b" name_in_code="b" array_group="analytical"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of analytical test species B"
+                             packages="chem_analytical_in"/>
+
+                        <var name="lbc_c" name_in_code="c" array_group="analytical"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of analytical test species C"
+                             packages="chem_analytical_in"/>
                 </var_array>
         </var_struct>
 

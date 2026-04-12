@@ -1,62 +1,33 @@
 ! Copyright (C) 2025 University Corporation for Atmospheric Research
 ! SPDX-License-Identifier: Apache-2.0
 !
-! State copy utilities: MPAS ↔ MICM data transfer with unit conversion
+! State copy utilities: MPAS ↔ MICM data transfer with unit conversion.
+! Mechanism-agnostic: uses species arrays from mpas_chemistry_species.
 !
 module mpas_chemistry_state
 
    use mpas_kind_types, only : RKIND
    use iso_fortran_env, only : real64
+   use mpas_chemistry_species, only : n_advected, advected_mpas_idx, &
+                                       advected_micm_idx, advected_molar_mass, &
+                                       n_constant, constant_micm_idx, constant_vmr, &
+                                       MW_AIR
 
    implicit none
 
    private
    public :: update_micm_from_mpas, update_mpas_from_micm
 
-   ! Number of Chapman reactive species
-   integer, parameter, public :: N_CHAPMAN_SPECIES = 3
-
-   ! Molar masses [kg/mol]
-   real (kind=real64), parameter, public :: MW_O3  = 0.048_real64
-   real (kind=real64), parameter, public :: MW_O   = 0.016_real64
-   real (kind=real64), parameter, public :: MW_O1D = 0.016_real64
-   real (kind=real64), parameter, public :: MW_O2  = 0.032_real64
-   real (kind=real64), parameter, public :: MW_N2  = 0.028_real64
-   real (kind=real64), parameter, public :: MW_AIR = 0.029_real64
-
-   ! Volume mixing ratios of constant species
-   real (kind=real64), parameter, public :: VMR_O2 = 0.2095_real64
-   real (kind=real64), parameter, public :: VMR_N2 = 0.7808_real64
-
 contains
 
-   !> Copy MPAS state into MICM state arrays for a batch of grid cells
+   !> Copy MPAS state into MICM state arrays for a batch of grid cells.
    !!
-   !! @param[in]     nCellsSolve    Number of owned cells
-   !! @param[in]     nVertLevels    Number of vertical levels
-   !! @param[in]     scalars        MPAS scalars(nScalars, nVertLevels, nCells)
-   !! @param[in]     temperature    Temperature(nVertLevels, nCells) [K]
-   !! @param[in]     pressure       Pressure(nVertLevels, nCells) [Pa]
-   !! @param[in]     rho_dry        Dry air density(nVertLevels, nCells) [kg/m3]
-   !! @param[in]     photo_rates    Photolysis rates(nVertLevels, nCells, n_photo) [s-1]
-   !! @param[in]     idx_o3, idx_o, idx_o1d  MPAS scalar indices for Chapman species
-   !! @param[in]     micm_idx_o3, micm_idx_o, micm_idx_o1d, micm_idx_o2, micm_idx_n2
-   !!                               MICM species ordering indices (1-based)
-   !! @param[in]     n_photo_rxns   Number of photolysis rate parameters
-   !! @param[in]     photo_mapping  Mapping from TUV-x ordering to MICM ordering
-   !! @param[in]     conditions     MICM conditions array
-   !! @param[inout]  concentrations MICM concentrations flat array
-   !! @param[inout]  rate_params    MICM rate_parameters flat array
-   !! @param[in]     sp_strides     Species strides (grid_cell, variable)
-   !! @param[in]     rp_strides     Rate parameter strides (grid_cell, variable)
-   !! @param[in]     offset         Offset into the batch (0-based)
-   !! @param[in]     batch_size     Number of grid cells in this batch
+   !! Iterates generic species arrays for advected and constant species.
+   !! Advected species: mmr [kg/kg] * rho [kg/m3] / Mw [kg/mol] → mol/m3
+   !! Constant species: VMR * air_conc [mol/m3] → mol/m3
    subroutine update_micm_from_mpas(nCellsSolve, nVertLevels, scalars,       &
                                      temperature, pressure, rho_dry,          &
                                      photo_rates,                             &
-                                     idx_o3, idx_o, idx_o1d,                  &
-                                     micm_idx_o3, micm_idx_o, micm_idx_o1d,  &
-                                     micm_idx_o2, micm_idx_n2,               &
                                      n_photo_rxns, photo_mapping,            &
                                      conditions, concentrations, rate_params, &
                                      sp_gc_stride, sp_var_stride,            &
@@ -71,10 +42,6 @@ contains
       real (kind=RKIND),          intent(in)    :: pressure(:,:)
       real (kind=RKIND),          intent(in)    :: rho_dry(:,:)
       real (kind=real64),         intent(in)    :: photo_rates(:,:,:)
-      integer,                    intent(in)    :: idx_o3, idx_o, idx_o1d
-      integer,                    intent(in)    :: micm_idx_o3, micm_idx_o
-      integer,                    intent(in)    :: micm_idx_o1d
-      integer,                    intent(in)    :: micm_idx_o2, micm_idx_n2
       integer,                    intent(in)    :: n_photo_rxns
       integer,                    intent(in)    :: photo_mapping(:)
       type(conditions_t),         intent(inout) :: conditions(:)
@@ -84,7 +51,7 @@ contains
       integer,                    intent(in)    :: rp_gc_stride, rp_var_stride
       integer,                    intent(in)    :: offset, batch_size
 
-      integer :: iCell, k, i_cell, i_local, flat_idx, r
+      integer :: iCell, k, i_cell, i_local, flat_idx, r, s
       real (kind=real64) :: rho_d, air_conc
 
       i_cell = 0
@@ -103,22 +70,21 @@ contains
             conditions(i_local)%pressure    = real(pressure(k, iCell), real64)
             conditions(i_local)%air_density = air_conc
 
-            ! Species concentrations: mmr [kg/kg] * rho [kg/m3] / Mw [kg/mol] = mol/m3
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o3 - 1) * sp_var_stride + 1
-            concentrations(flat_idx) = real(scalars(idx_o3, k, iCell), real64) * rho_d / MW_O3
+            ! Advected species: mmr → mol/m3
+            do s = 1, n_advected
+               flat_idx = (i_local - 1) * sp_gc_stride &
+                        + (advected_micm_idx(s) - 1) * sp_var_stride + 1
+               concentrations(flat_idx) = &
+                  real(scalars(advected_mpas_idx(s), k, iCell), real64) &
+                  * rho_d / advected_molar_mass(s)
+            end do
 
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o - 1) * sp_var_stride + 1
-            concentrations(flat_idx) = real(scalars(idx_o, k, iCell), real64) * rho_d / MW_O
-
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o1d - 1) * sp_var_stride + 1
-            concentrations(flat_idx) = real(scalars(idx_o1d, k, iCell), real64) * rho_d / MW_O1D
-
-            ! Constant species: O2, N2 diagnosed from air density
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o2 - 1) * sp_var_stride + 1
-            concentrations(flat_idx) = VMR_O2 * air_conc
-
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_n2 - 1) * sp_var_stride + 1
-            concentrations(flat_idx) = VMR_N2 * air_conc
+            ! Constant species: VMR * air_conc → mol/m3
+            do s = 1, n_constant
+               flat_idx = (i_local - 1) * sp_gc_stride &
+                        + (constant_micm_idx(s) - 1) * sp_var_stride + 1
+               concentrations(flat_idx) = constant_vmr(s) * air_conc
+            end do
 
             ! Rate parameters (photolysis rates)
             do r = 1, n_photo_rxns
@@ -132,22 +98,12 @@ contains
    end subroutine update_micm_from_mpas
 
 
-   !> Copy MICM state back to MPAS scalars after chemistry solve
+   !> Copy MICM state back to MPAS scalars after chemistry solve.
    !!
-   !! @param[in]     nCellsSolve    Number of owned cells
-   !! @param[in]     nVertLevels    Number of vertical levels
-   !! @param[inout]  scalars        MPAS scalars(nScalars, nVertLevels, nCells)
-   !! @param[in]     rho_dry        Dry air density(nVertLevels, nCells) [kg/m3]
-   !! @param[in]     idx_o3, idx_o, idx_o1d  MPAS scalar indices
-   !! @param[in]     micm_idx_o3, micm_idx_o, micm_idx_o1d  MICM species indices
-   !! @param[in]     concentrations MICM concentrations flat array
-   !! @param[in]     sp_gc_stride, sp_var_stride  Species strides
-   !! @param[in]     offset         Offset into the batch (0-based)
-   !! @param[in]     batch_size     Number of grid cells in this batch
+   !! Only advected species are copied back (constant species are read-only).
+   !! mol/m3 * Mw [kg/mol] / rho [kg/m3] → mmr [kg/kg]
    subroutine update_mpas_from_micm(nCellsSolve, nVertLevels, scalars,       &
                                      rho_dry,                                 &
-                                     idx_o3, idx_o, idx_o1d,                  &
-                                     micm_idx_o3, micm_idx_o, micm_idx_o1d,  &
                                      concentrations,                          &
                                      sp_gc_stride, sp_var_stride,            &
                                      offset, batch_size)
@@ -155,14 +111,11 @@ contains
       integer,                    intent(in)    :: nCellsSolve, nVertLevels
       real (kind=RKIND),          intent(inout) :: scalars(:,:,:)
       real (kind=RKIND),          intent(in)    :: rho_dry(:,:)
-      integer,                    intent(in)    :: idx_o3, idx_o, idx_o1d
-      integer,                    intent(in)    :: micm_idx_o3, micm_idx_o
-      integer,                    intent(in)    :: micm_idx_o1d
       real (kind=real64),         intent(in)    :: concentrations(:)
       integer,                    intent(in)    :: sp_gc_stride, sp_var_stride
       integer,                    intent(in)    :: offset, batch_size
 
-      integer :: iCell, k, i_cell, i_local, flat_idx
+      integer :: iCell, k, i_cell, i_local, flat_idx, s
       real (kind=real64) :: rho_d, mmr_val
 
       i_cell = 0
@@ -175,18 +128,13 @@ contains
 
             rho_d = real(rho_dry(k, iCell), real64)
 
-            ! mol/m3 * Mw [kg/mol] / rho [kg/m3] = mmr [kg/kg]
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o3 - 1) * sp_var_stride + 1
-            mmr_val = concentrations(flat_idx) * MW_O3 / rho_d
-            scalars(idx_o3, k, iCell) = max(real(mmr_val, RKIND), 0.0_RKIND)
-
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o - 1) * sp_var_stride + 1
-            mmr_val = concentrations(flat_idx) * MW_O / rho_d
-            scalars(idx_o, k, iCell) = max(real(mmr_val, RKIND), 0.0_RKIND)
-
-            flat_idx = (i_local - 1) * sp_gc_stride + (micm_idx_o1d - 1) * sp_var_stride + 1
-            mmr_val = concentrations(flat_idx) * MW_O1D / rho_d
-            scalars(idx_o1d, k, iCell) = max(real(mmr_val, RKIND), 0.0_RKIND)
+            ! Advected species: mol/m3 → mmr
+            do s = 1, n_advected
+               flat_idx = (i_local - 1) * sp_gc_stride &
+                        + (advected_micm_idx(s) - 1) * sp_var_stride + 1
+               mmr_val = concentrations(flat_idx) * advected_molar_mass(s) / rho_d
+               scalars(advected_mpas_idx(s), k, iCell) = max(real(mmr_val, RKIND), 0.0_RKIND)
+            end do
          end do
       end do
 

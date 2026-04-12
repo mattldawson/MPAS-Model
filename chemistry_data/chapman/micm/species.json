@@ -4,7 +4,8 @@
       "name": "N2",
       "type": "CHEM_SPEC",
       "absolute tolerance": 1e-12,
-      "molecular weight [kg mol-1]": 0.0280134
+      "molecular weight [kg mol-1]": 0.0280134,
+      "__mpas_constant_vmr": 0.7808
     },
     {
       "name": "M",
@@ -27,7 +28,8 @@
       "name": "O2",
       "type": "CHEM_SPEC",
       "absolute tolerance": 1e-12,
-      "molecular weight [kg mol-1]": 0.0319988
+      "molecular weight [kg mol-1]": 0.0319988,
+      "__mpas_constant_vmr": 0.2095
     },
     {
       "name": "O3",

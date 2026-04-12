@@ -480,6 +480,10 @@ module init_atm_cases
       real (kind=RKIND), parameter :: mw_air = 0.029_RKIND   ! dry air molar mass [kg/mol]
 !.. end initialization of Chapman chemistry species.
 
+!.. initialization of analytical test species:
+      integer, pointer :: index_a, index_b, index_c
+!.. end initialization of analytical test species.
+
       integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
       integer, pointer :: nz1, nCellsSolve, nEdges, maxEdges, nVertices
 
@@ -1320,6 +1324,28 @@ module init_atm_cases
 
          call mpas_log_write('   O3: analytic stratospheric profile (peak ~8 ppmv at 35 km)')
          call mpas_log_write('   O, O1D: initialized to zero')
+      end if
+
+      !
+      ! Initialize analytical test species (A, B, C)
+      !
+      call mpas_pool_get_dimension(state, 'index_a', index_a)
+      call mpas_pool_get_dimension(state, 'index_b', index_b)
+      call mpas_pool_get_dimension(state, 'index_c', index_c)
+
+      if (associated(index_a) .and. associated(index_b) .and. associated(index_c)) then
+         call mpas_log_write(' Initializing analytical test species')
+
+         do iCell = 1, nCells
+            do k = 1, nVertLevels
+               scalars(index_a, k, iCell) = 1.0e-6_RKIND   ! 1 ppm background
+               scalars(index_b, k, iCell) = 0.0_RKIND
+               scalars(index_c, k, iCell) = 0.0_RKIND
+            end do
+         end do
+
+         call mpas_log_write('   A: uniform background = 1e-6 kg/kg')
+         call mpas_log_write('   B, C: initialized to zero')
       end if
 
    end subroutine init_atm_case_jw

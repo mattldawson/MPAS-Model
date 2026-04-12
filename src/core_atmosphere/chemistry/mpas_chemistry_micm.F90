@@ -16,10 +16,11 @@ module mpas_chemistry_micm
 
    private
    public :: micm_setup, micm_solve, micm_cleanup
-   public :: micm_state, n_micm_species, n_micm_rate_params
+   public :: micm_state, micm_solver_ptr, n_micm_species, n_micm_rate_params
 
    ! Module-level MICM objects
    type(micm_t),  pointer :: micm_solver => null()
+   type(micm_t),  pointer :: micm_solver_ptr => null()   ! public read-only alias
    type(state_t), pointer :: micm_state  => null()
 
    ! Sizing info
@@ -52,6 +53,9 @@ contains
          errmsg = '[CheMPAS] MICM solver is null after construction'
          errcode = 1; return
       end if
+
+      ! Expose solver pointer for species discovery
+      micm_solver_ptr => micm_solver
 
       ! Query maximum grid cells
       max_grid_cells = micm_solver%get_maximum_number_of_grid_cells()

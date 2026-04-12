@@ -329,7 +329,12 @@ contains
    subroutine tuvx_run_column(nVertLevels, zgrid, temperature, rho_dry, &
                                o3_mmr, sza, earth_sun_dist,             &
                                photo_rates, errmsg, errcode)
-      use mpas_chemistry_state, only : MW_AIR, MW_O3, MW_O2, VMR_O2
+      use mpas_chemistry_species, only : MW_AIR
+
+      ! Fixed atmospheric constants for TUV-x column setup
+      real (kind=real64), parameter :: MW_O3  = 0.048_real64  ! [kg/mol]
+      real (kind=real64), parameter :: MW_O2  = 0.032_real64  ! [kg/mol]
+      real (kind=real64), parameter :: VMR_O2 = 0.2095_real64 ! volume mixing ratio
 
       integer,             intent(in)  :: nVertLevels
       real (kind=RKIND),   intent(in)  :: zgrid(:)           ! (nVertLevels+1) [m]
