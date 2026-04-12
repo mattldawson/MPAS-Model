@@ -115,12 +115,27 @@ FROM deps AS build
 WORKDIR /mpas
 COPY . .
 
-# Physics externals (physics_mmm, physics_noaa) must be pre-checked-out on the
-# host before building.  Replace checkout_externals with a no-op so the physics
-# Makefile doesn't try to run git inside the container build context.
+# Fetch physics externals directly (avoids fragile manage_externals tool)
+RUN git clone --depth 1 --branch 20250616-MPASv8.3 \
+        https://github.com/NCAR/MMM-physics.git \
+        src/core_atmosphere/physics/physics_mmm \
+    && mkdir -p src/core_atmosphere/physics/physics_noaa \
+    && git clone --depth 1 --branch MPAS_20241223 \
+        https://github.com/NOAA-GSL/UGWP.git \
+        src/core_atmosphere/physics/physics_noaa/UGWP \
+    && mkdir -p src/core_atmosphere/physics/physics_wrf/files \
+    && cd src/core_atmosphere/physics/physics_wrf/files \
+    && wget -q https://github.com/MPAS-Dev/MPAS-Data/archive/refs/tags/v8.2.tar.gz \
+    && tar xzf v8.2.tar.gz --strip-components=4 "MPAS-Data-8.2/atmosphere/physics_wrf/files" \
+    && rm v8.2.tar.gz
+
+# No-op the checkout scripts so make doesn't re-run them
 RUN printf '#!/bin/sh\nexec true\n' \
         > src/core_atmosphere/tools/manage_externals/checkout_externals \
-    && chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
+    && chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals \
+    && printf '#!/bin/sh\nexec true\n' \
+        > src/core_atmosphere/physics/checkout_data_files.sh \
+    && chmod +x src/core_atmosphere/physics/checkout_data_files.sh
 
 # Build init_atmosphere core first (no MUSICA needed), then atmosphere core
 RUN make -j"$(nproc)" gnu CORE=init_atmosphere USE_PIO2=false \

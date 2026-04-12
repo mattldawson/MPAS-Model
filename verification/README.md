@@ -13,11 +13,18 @@ podman build -f docker/Containerfile --target deps -t chempas-deps .
 podman build -f docker/Containerfile --target dev  -t chempas-dev  .
 
 # 2. Fetch physics externals (only needed once after a fresh clone)
-#    This downloads MMM-physics, NOAA UGWP, and WRF physics lookup tables.
-podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
-  cd src/core_atmosphere && tools/manage_externals/checkout_externals --externals Externals.cfg
-  cd physics && ./checkout_data_files.sh
-'
+#    This replaces the fragile manage_externals tool with direct git clones.
+PHYS=src/core_atmosphere/physics
+git clone --depth 1 --branch 20250616-MPASv8.3 \
+    https://github.com/NCAR/MMM-physics.git $PHYS/physics_mmm
+mkdir -p $PHYS/physics_noaa
+git clone --depth 1 --branch MPAS_20241223 \
+    https://github.com/NOAA-GSL/UGWP.git $PHYS/physics_noaa/UGWP
+mkdir -p $PHYS/physics_wrf/files && cd $PHYS/physics_wrf/files
+wget -q https://github.com/MPAS-Dev/MPAS-Data/archive/refs/tags/v8.2.tar.gz
+tar xzf v8.2.tar.gz --strip-components=4 "MPAS-Data-8.2/atmosphere/physics_wrf/files"
+rm v8.2.tar.gz
+cd -
 
 # 3. Build MPAS inside the container
 podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
