@@ -142,11 +142,14 @@ RUN printf '#!/bin/sh\nexec true\n' \
     && chmod +x src/core_atmosphere/physics/checkout_data_files.sh
 
 # Build init_atmosphere core first (no MUSICA needed), then atmosphere core
+# Save init_atmosphere_model before cleaning for the atmosphere build
 RUN make -j"$(nproc)" gnu CORE=init_atmosphere USE_PIO2=false \
+    && cp init_atmosphere_model /tmp/init_atmosphere_model \
     && make clean CORE=atmosphere \
     && make -j"$(nproc)" gnu CORE=atmosphere USE_PIO2=false \
        MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
-       MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
+       MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)" \
+    && cp /tmp/init_atmosphere_model init_atmosphere_model
 
 # ---------------------------------------------------------------------------
 # Stage 3: run — lean runtime image with MPAS executables

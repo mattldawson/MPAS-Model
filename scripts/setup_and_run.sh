@@ -68,9 +68,13 @@ ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" bash -c '
     make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
         MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
         MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
-    # Build init_atmosphere core (AUTOCLEAN lets it re-compile the
-    # shared framework that was built with different options above)
+    # Save atmosphere_model — AUTOCLEAN below will remove it
+    cp atmosphere_model /tmp/atmosphere_model
+    # Build init_atmosphere core (AUTOCLEAN re-compiles the shared
+    # framework that was built with different options above)
     make -j$(nproc) gnu CORE=init_atmosphere USE_PIO2=false AUTOCLEAN=true
+    # Restore atmosphere_model
+    cp /tmp/atmosphere_model atmosphere_model
 '
 
 # ---------- Step 4: Download mesh data ---------------------------------------
