@@ -485,6 +485,8 @@ module init_atm_cases
       integer, allocatable :: ic_scalar_idx(:)
       integer, pointer :: ic_idx_ptr
       real (kind=RKIND) :: ic_z_km, ic_frac
+      character(len=64) :: ic_lower_name
+      integer :: ic_ch
 !.. end initialization of chemistry species.
 
       integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
@@ -1413,9 +1415,18 @@ module init_atm_cases
          ! Map species names to scalar indices
          allocate(ic_scalar_idx(ic_nspecies))
          do ic_s = 1, ic_nspecies
+            ! Convert species name to lowercase for MPAS Registry lookup
+            ic_lower_name = ic_species_names(ic_s)
+            do ic_ch = 1, len_trim(ic_lower_name)
+               if (ic_lower_name(ic_ch:ic_ch) >= 'A' .and. &
+                   ic_lower_name(ic_ch:ic_ch) <= 'Z') then
+                  ic_lower_name(ic_ch:ic_ch) = &
+                     achar(iachar(ic_lower_name(ic_ch:ic_ch)) + 32)
+               end if
+            end do
             nullify(ic_idx_ptr)
             call mpas_pool_get_dimension(state, 'index_' // &
-                 trim(ic_species_names(ic_s)), ic_idx_ptr)
+                 trim(ic_lower_name), ic_idx_ptr)
             if (associated(ic_idx_ptr)) then
                ic_scalar_idx(ic_s) = ic_idx_ptr
             else
