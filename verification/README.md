@@ -20,10 +20,9 @@ jupyter notebook verification/
 # — or open in VS Code —
 ```
 
-The setup script is safe to re-run — every step is skipped if its output
-already exists.  Delete `data/jw_480km/` to force a fresh run, or
-`atmosphere_model` to force a rebuild.  Set `CONTAINER_RT=docker` if you
-use Docker instead of Podman.
+The setup script always rebuilds from clean (only the container image and mesh
+download are cached).  Set `CONTAINER_RT=docker` if you use Docker instead of
+Podman.
 
 ## Notebooks
 
