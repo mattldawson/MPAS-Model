@@ -58,13 +58,18 @@ rm -f /tmp/mpas-data-v8.2.tar.gz
 step "Step 3/6: Build MPAS-A (atmosphere + init_atmosphere)"
 rm -f atmosphere_model init_atmosphere_model
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" bash -c '
+    set -euo pipefail
+
     # No-op the external-checkout scripts (we already fetched everything)
     printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/tools/manage_externals/checkout_externals
     chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
     printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/physics/checkout_data_files.sh
     chmod +x src/core_atmosphere/physics/checkout_data_files.sh
 
-    # Build atmosphere core first (needs MUSICA flags)
+    # Clean everything first to avoid stale object files
+    make clean CORE=atmosphere 2>/dev/null || true
+
+    # Build atmosphere core (needs MUSICA flags)
     make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
         MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
         MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
@@ -97,6 +102,7 @@ ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
     bash scripts/run_jw_test.sh "${NPROCS}" analytical
 
 # Backward-compatible symlink for phases 0-2 (which expect data/jw_480km/)
+rm -rf data/jw_480km
 ln -sfn jw_480km_chapman data/jw_480km
 
 # ---------- Done -------------------------------------------------------------
