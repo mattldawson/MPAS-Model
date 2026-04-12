@@ -152,7 +152,7 @@
     },
     {
       "type": "PHOTOLYSIS",
-      "name": "jo2",
+      "name": "jo2_b",
       "scaling factor": 1,
       "gas phase": "gas",
       "reactants": [

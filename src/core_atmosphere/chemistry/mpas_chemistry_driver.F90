@@ -99,8 +99,14 @@ contains
          micm_config_path = trim(config_chemistry_config_path) // '/micm/config.json'
       end if
 
-      ! TUV-x: optional, check if tuvx/config.json exists
-      tuvx_config_path = trim(config_chemistry_config_path) // '/tuvx/config.json'
+      ! TUV-x: shared config at sibling 'tuvx/' directory of the mechanism
+      ! e.g., chemistry_data/chapman → chemistry_data/tuvx/config.json
+      r = index(trim(config_chemistry_config_path), '/', back=.true.)
+      if (r > 0) then
+         tuvx_config_path = config_chemistry_config_path(1:r) // 'tuvx/config.json'
+      else
+         tuvx_config_path = 'tuvx/config.json'
+      end if
 
       ! Get mesh dimensions from first block
       call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
@@ -143,7 +149,14 @@ contains
       end if
 
       ! --- Setup TUV-x (optional) ---
-      inquire(file=trim(tuvx_config_path), exist=tuvx_enabled)
+      ! TUV-x requires gas profile annotations on MICM species (e.g., O2, O3).
+      ! Mechanisms without these profiles (like analytical) skip TUV-x entirely.
+      if (n_tuvx_profiles > 0) then
+         call mpas_log_write('[CheMPAS] TUV-x config: ' // trim(tuvx_config_path))
+         inquire(file=trim(tuvx_config_path), exist=tuvx_enabled)
+      else
+         tuvx_enabled = .false.
+      end if
       if (tuvx_enabled) then
          call tuvx_init(tuvx_config_path, nVertLevels, &
                          real(config_chemistry_surface_albedo, real64), &
@@ -160,7 +173,12 @@ contains
             return
          end if
       else
-         call mpas_log_write('[CheMPAS] TUV-x disabled (no config path)')
+         if (n_tuvx_profiles == 0) then
+            call mpas_log_write('[CheMPAS] TUV-x disabled (no gas profiles in mechanism)')
+         else
+            call mpas_log_write('[CheMPAS] TUV-x disabled (config not found: ' &
+                                // trim(tuvx_config_path) // ')')
+         end if
          n_photo_rxns_local = 0
          allocate(photo_mapping(0))
       end if
@@ -207,6 +225,11 @@ contains
 
 
    !> Build photolysis rate mapping: TUV-x ordering → MICM rate_parameters.
+   !! Maps each TUV-x photolysis reaction to the corresponding MICM rate
+   !! parameter index.  Unmapped reactions (ones TUV-x computes but the
+   !! current MICM mechanism does not use) get photo_mapping = -1.
+   !! Both PHOTO. (PHOTOLYSIS type) and USER. (USER_DEFINED type) prefixes
+   !! are tried so this works for both v0-style and TS1-style mechanisms.
    subroutine build_photo_mapping(errmsg, errcode)
 
       use musica_util, only : error_t
@@ -216,21 +239,42 @@ contains
       integer, intent(out) :: errcode
 
       type(error_t) :: error
-      integer :: r
+      integer :: r, n_mapped
 
       errmsg  = ''
       errcode = 0
+      n_mapped = 0
 
       allocate(photo_mapping(n_photo_rxns))
       do r = 1, n_photo_rxns
+         ! Try PHOTO. prefix first (MICM PHOTOLYSIS reaction type)
          photo_mapping(r) = micm_state%rate_parameters_ordering%index( &
             'PHOTO.' // trim(photo_ordering%name(r)), error)
-         if (.not. error%is_success()) then
-            errmsg = '[CheMPAS] Cannot map photo rxn ' // trim(photo_ordering%name(r)) &
-                     // ': ' // error%message()
-            errcode = 1; return
+         if (error%is_success()) then
+            n_mapped = n_mapped + 1
+            cycle
          end if
+
+         ! Try USER. prefix (MICM USER_DEFINED reaction type)
+         photo_mapping(r) = micm_state%rate_parameters_ordering%index( &
+            'USER.' // trim(photo_ordering%name(r)), error)
+         if (error%is_success()) then
+            n_mapped = n_mapped + 1
+            cycle
+         end if
+
+         ! No match — this TUV-x reaction is not used by the current mechanism
+         photo_mapping(r) = -1
       end do
+
+      call mpas_log_write('[CheMPAS] TUV-x photo mapping: $i of $i reactions mapped', &
+                          intArgs=(/n_mapped, n_photo_rxns/))
+
+      if (n_mapped == 0) then
+         call mpas_log_write('[CheMPAS] WARNING: No TUV-x reactions mapped to MICM — ' &
+                             // 'disabling TUV-x')
+         tuvx_enabled = .false.
+      end if
 
    end subroutine build_photo_mapping
 

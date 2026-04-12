@@ -105,6 +105,7 @@ RUN cd /tmp \
     && cmake --install build \
     && mkdir -p /usr/local/share/musica/tuvx_data \
     && cp -r /tmp/musica/configs/tuvx/data/cross_sections /usr/local/share/musica/tuvx_data/ \
+    && cp -r /tmp/musica/configs/tuvx/data/quantum_yields /usr/local/share/musica/tuvx_data/ \
     && rm -rf /tmp/musica
 
 # ---------------------------------------------------------------------------

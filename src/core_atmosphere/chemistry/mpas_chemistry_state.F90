@@ -88,6 +88,7 @@ contains
 
             ! Rate parameters (photolysis rates)
             do r = 1, n_photo_rxns
+               if (photo_mapping(r) < 1) cycle  ! unmapped TUV-x reaction
                flat_idx = (i_local - 1) * rp_gc_stride &
                         + (photo_mapping(r) - 1) * rp_var_stride + 1
                rate_params(flat_idx) = photo_rates(k, iCell, r)

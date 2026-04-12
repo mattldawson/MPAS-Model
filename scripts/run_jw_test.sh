@@ -60,15 +60,17 @@ done
 
 # Link chemistry configuration data
 cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
-# TUV-x data files: only needed if mechanism has tuvx/ directory
-if [ -d "${MPAS_DIR}/chemistry_data/${MECHANISM}/tuvx" ]; then
+# TUV-x data files: shared config at chemistry_data/tuvx/
+if [ -d "chemistry_data/tuvx" ]; then
     MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
     if [ -d "${MUSICA_DATA}" ]; then
-        mkdir -p chemistry_data/${MECHANISM}/tuvx/data
-        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/${MECHANISM}/tuvx/data/cross_sections
+        mkdir -p chemistry_data/tuvx/data
+        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/tuvx/data/cross_sections
+        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/quantum_yields" chemistry_data/tuvx/data/quantum_yields
     elif [ -d "/usr/local/share/musica/tuvx_data" ]; then
-        mkdir -p chemistry_data/${MECHANISM}/tuvx/data
-        ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/${MECHANISM}/tuvx/data/cross_sections
+        mkdir -p chemistry_data/tuvx/data
+        ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/tuvx/data/cross_sections
+        ln -sf "/usr/local/share/musica/tuvx_data/quantum_yields" chemistry_data/tuvx/data/quantum_yields
     else
         echo "WARNING: TUV-x data files not found. Photolysis chemistry may fail." >&2
     fi

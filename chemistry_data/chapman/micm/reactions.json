@@ -79,7 +79,7 @@
         {
           "type": "PHOTOLYSIS",
           "scaling factor": 1,
-          "MUSICA name": "jo2",
+          "MUSICA name": "jo2_b",
           "reactants": {
             "O2": {}
           },
