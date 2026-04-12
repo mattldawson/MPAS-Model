@@ -7,22 +7,33 @@ you can see at a glance that the phase is working.
 ## Quick Start
 
 ```bash
-# 1. Build the container and run the JW test (produces data/jw_480km/output.nc)
-#    See docker/Containerfile and scripts/ for details.
-bash scripts/download_data.sh data
-podman build -f docker/Containerfile --target build -t chempas-build .
-podman run --rm \
-    -v "$(pwd)/data:/mpas/data:Z" \
-    -v "$(pwd)/scripts:/mpas/scripts:Z" \
-    -w /mpas chempas-build \
-    bash scripts/run_jw_test.sh 2
+# 1. Build the container (from the MPAS-Model directory)
+cd MPAS-Model
+podman build -f docker/Containerfile --target deps -t chempas-deps .
+podman build -f docker/Containerfile --target dev  -t chempas-dev  .
 
-# 2. Set up a Python virtual environment
+# 2. Build MPAS inside the container
+podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
+  printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/tools/manage_externals/checkout_externals
+  chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
+  make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
+    MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
+    MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
+'
+
+# 3. Run the JW test (produces data/jw_480km/output.nc)
+podman run --rm \
+    -v "$(pwd):/mpas:Z" \
+    -v "$(pwd)/../configs:/mpas/../configs:Z" \
+    -w /mpas localhost/chempas-dev \
+    bash scripts/run_jw_test.sh 1
+
+# 4. Set up a Python virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r verification/requirements.txt
 
-# 3. Open the notebooks
+# 5. Open the notebooks
 jupyter notebook verification/
 # — or open in VS Code —
 ```
@@ -45,16 +56,17 @@ jupyter notebook verification/
 
 ## Data Layout
 
-The notebooks expect output files under `data/` (gitignored). Each phase's
-container run script places output in a phase-specific subdirectory:
+The notebooks expect output files under `data/` (gitignored). The JW test
+script writes output to a single directory used by all current phases:
 
 ```
 data/
-  jw_480km/output.nc          ← Phase 0 (and base for later phases)
-  jw_480km_tracers/output.nc  ← Phase 1
-  jw_480km_chapman/output.nc  ← Phase 2
-  ...
+  jw_480km/output.nc   ← Phases 0, 1, and 2 (includes tracers + chemistry species)
 ```
+
+The output contains all registered scalars (`tracer_1`, `tracer_2`, `tracer_3`,
+`o3`, `o`, `o1d`) plus standard dynamical fields (`theta`, `uReconstructZonal`,
+`uReconstructMeridional`, `surface_pressure`, etc.).
 
 ## Dependencies
 
