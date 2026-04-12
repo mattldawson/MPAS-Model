@@ -40,7 +40,6 @@ podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
 # 4. Run the JW test (produces data/jw_480km/output.nc)
 podman run --rm \
     -v "$(pwd):/mpas:Z" \
-    -v "$(pwd)/../configs:/mpas/../configs:Z" \
     -w /mpas localhost/chempas-dev \
     bash scripts/run_jw_test.sh 1
 
