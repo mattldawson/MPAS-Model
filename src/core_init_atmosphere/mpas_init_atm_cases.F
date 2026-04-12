@@ -473,6 +473,13 @@ module init_atm_cases
       real (kind=RKIND) :: great_circle_dist
 !.. end initialization of passive tracers.
 
+!.. initialization of Chapman chemistry species:
+      integer, pointer :: index_o3, index_o, index_o1d
+      real (kind=RKIND) :: z_km, o3_vmr, o3_mmr
+      real (kind=RKIND), parameter :: mw_o3 = 0.048_RKIND   ! O3 molar mass [kg/mol]
+      real (kind=RKIND), parameter :: mw_air = 0.029_RKIND   ! dry air molar mass [kg/mol]
+!.. end initialization of Chapman chemistry species.
+
       integer :: iCell, iCell1, iCell2 , iEdge, vtx1, vtx2, ivtx, i, k, nz, itr, itrp, cell1, cell2
       integer, pointer :: nz1, nCellsSolve, nEdges, maxEdges, nVertices
 
@@ -1276,6 +1283,43 @@ module init_atm_cases
          call mpas_log_write('   tracer_1: Gaussian blob at 45N, 0E, mid-level')
          call mpas_log_write('   tracer_2: Uniform background = 1.0')
          call mpas_log_write('   tracer_3: Surface-concentrated exponential decay')
+      end if
+
+      !
+      ! Initialize Chapman chemistry species (O3, O, O1D)
+      !
+      call mpas_pool_get_dimension(state, 'index_o3', index_o3)
+      call mpas_pool_get_dimension(state, 'index_o', index_o)
+      call mpas_pool_get_dimension(state, 'index_o1d', index_o1d)
+
+      if (associated(index_o3) .and. associated(index_o) .and. associated(index_o1d)) then
+         call mpas_log_write(' Initializing Chapman chemistry species')
+
+         do iCell = 1, nCells
+            do k = 1, nVertLevels
+               ! Height at layer midpoint in km
+               z_km = 0.5e-3 * (zgrid(k,iCell) + zgrid(k+1,iCell))
+
+               ! US Standard Atmosphere O3 approximation (vmr)
+               if (z_km < 20.0) then
+                  o3_vmr = 30.0e-9 + (z_km / 20.0) * 70.0e-9       ! 30-100 ppbv
+               else if (z_km < 35.0) then
+                  o3_vmr = 100.0e-9 + ((z_km - 20.0) / 15.0) * 7900.0e-9  ! ramp to 8 ppmv
+               else
+                  o3_vmr = 8000.0e-9 * exp(-(z_km - 35.0) / 8.0)   ! exponential decay
+               end if
+
+               ! Convert vmr to mmr: mmr = vmr * M_O3 / M_air
+               o3_mmr = o3_vmr * mw_o3 / mw_air
+
+               scalars(index_o3, k, iCell) = o3_mmr
+               scalars(index_o, k, iCell) = 0.0
+               scalars(index_o1d, k, iCell) = 0.0
+            end do
+         end do
+
+         call mpas_log_write('   O3: analytic stratospheric profile (peak ~8 ppmv at 35 km)')
+         call mpas_log_write('   O, O1D: initialized to zero')
       end if
 
    end subroutine init_atm_case_jw

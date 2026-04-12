@@ -48,6 +48,7 @@ module atm_core
       use mpas_attlist, only : mpas_modify_att
       use mpas_string_utils, only : mpas_string_replace
       use mpas_atm_halos, only: atm_build_halo_groups, exchange_halo_group
+      use mpas_chemistry_driver, only : chemistry_init
 
       implicit none
 
@@ -294,6 +295,11 @@ module atm_core
       ! Prepare the dynamics for integration
       !
       call mpas_atm_dynamics_init(domain)
+
+      !
+      ! Initialize chemistry (MICM + TUV-x)
+      !
+      call chemistry_init(domain)
 
    end function atm_core_init
 
@@ -986,6 +992,7 @@ module atm_core
       use mpas_atmphys_manager
       use mpas_atmphys_update
 #endif
+      use mpas_chemistry_driver, only : chemistry_timestep
       use mpas_atm_halos, only: exchange_halo_group
    
       implicit none
@@ -1019,6 +1026,9 @@ module atm_core
       endif
 #endif
 
+      ! Chemistry: TUV-x photolysis + MICM kinetics (operator-split before dynamics)
+      call chemistry_timestep(domain, dt, itimestep)
+
       call atm_timestep(domain, dt, currTime, itimestep, exchange_halo_group)
 
    end subroutine atm_do_timestep
@@ -1032,6 +1042,7 @@ module atm_core
       use mpas_atm_threading, only : mpas_atm_threading_finalize
       use atm_time_integration, only : mpas_atm_dynamics_finalize
       use mpas_atm_halos, only: atm_destroy_halo_groups
+      use mpas_chemistry_driver, only : chemistry_finalize
    
 #ifdef DO_PHYSICS
       use mpas_atmphys_finalize
@@ -1066,6 +1077,8 @@ module atm_core
             block_ptr => block_ptr%next
          end do
 #endif
+
+      call chemistry_finalize()
 
       !
       ! Destroy halo exchange groups

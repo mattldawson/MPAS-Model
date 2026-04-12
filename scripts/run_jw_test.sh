@@ -47,6 +47,20 @@ for f in "${MESH_DIR}"/x1.2562.graph.info.part.*; do
     [ -f "$f" ] && ln -sf "$f" .
 done
 
+# Link chemistry configuration data
+cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
+# TUV-x data files: use MUSICA source tree data if available, else the installed data
+MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
+if [ -d "${MUSICA_DATA}" ]; then
+    mkdir -p chemistry_data/chapman/tuvx/data
+    ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
+elif [ -d "/usr/local/share/musica/tuvx_data" ]; then
+    mkdir -p chemistry_data/chapman/tuvx/data
+    ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/chapman/tuvx/data/cross_sections
+else
+    echo "WARNING: TUV-x data files not found. Chemistry may fail." >&2
+fi
+
 # ---- Create init namelist ----
 cat > namelist.init_atmosphere << 'EOF'
 &nhyd_model
@@ -185,6 +199,14 @@ cat > namelist.atmosphere << 'EOF'
     config_radtsw_interval = '00:30:00'
     config_bucket_update = 'none'
     config_physics_suite = 'none'
+/
+
+&chemistry
+    config_chemistry_enabled = .true.
+    config_chemistry_dt = 60.0
+    config_micm_config_path = 'chemistry_data/chapman/micm/config.json'
+    config_tuvx_config_path = 'chemistry_data/chapman/tuvx/config.json'
+    config_tuvx_micm_mapping_path = 'chemistry_data/chapman/tuvx_micm_mapping.json'
 /
 EOF
 

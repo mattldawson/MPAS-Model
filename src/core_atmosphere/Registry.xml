@@ -394,6 +394,33 @@
                      possible_values="`mpas_dmpar', `mpas_halo'"/>
         </nml_record>
 
+        <nml_record name="chemistry" in_defaults="true">
+                <nml_option name="config_chemistry_enabled" type="logical" default_value=".false."
+                     units="-"
+                     description="Whether to enable chemistry"
+                     possible_values=".true. or .false."/>
+
+                <nml_option name="config_chemistry_dt" type="real" default_value="0."
+                     units="s"
+                     description="Chemistry timestep; if 0 uses dynamics timestep"
+                     possible_values="Non-negative real values"/>
+
+                <nml_option name="config_micm_config_path" type="character" default_value=""
+                     units="-"
+                     description="Path to MICM mechanism configuration file"
+                     possible_values="Valid file path"/>
+
+                <nml_option name="config_tuvx_config_path" type="character" default_value=""
+                     units="-"
+                     description="Path to TUV-x configuration file"
+                     possible_values="Valid file path"/>
+
+                <nml_option name="config_tuvx_micm_mapping_path" type="character" default_value=""
+                     units="-"
+                     description="Path to TUV-x to MICM photolysis mapping file"
+                     possible_values="Valid file path"/>
+        </nml_record>
+
 <!-- **************************************************************************************** -->
 <!-- **************************************  Packages  ************************************** -->
 <!-- **************************************************************************************** -->
@@ -1682,6 +1709,15 @@
 
                         <var name="tracer_3" array_group="passive" units="kg kg^{-1}"
                              description="Passive tracer 3: Surface-concentrated for vertical advection testing"/>
+
+                        <var name="o3" array_group="chapman" units="kg kg^{-1}"
+                             description="Ozone mass mixing ratio"/>
+
+                        <var name="o" array_group="chapman" units="kg kg^{-1}"
+                             description="Atomic oxygen mass mixing ratio"/>
+
+                        <var name="o1d" array_group="chapman" units="kg kg^{-1}"
+                             description="Excited atomic oxygen O(1D) mass mixing ratio"/>
                 </var_array>
 #endif
 
@@ -2042,6 +2078,15 @@
 
                         <var name="tend_tracer_3" name_in_code="tracer_3" array_group="passive" units="kg m^{-3} s^{-1}"
                              description="Tendency of passive tracer 3 mass per unit volume divided by d(zeta)/dz"/>
+
+                        <var name="tend_o3" name_in_code="o3" array_group="chapman" units="kg m^{-3} s^{-1}"
+                             description="Tendency of ozone mass per unit volume divided by d(zeta)/dz"/>
+
+                        <var name="tend_o" name_in_code="o" array_group="chapman" units="kg m^{-3} s^{-1}"
+                             description="Tendency of atomic oxygen mass per unit volume divided by d(zeta)/dz"/>
+
+                        <var name="tend_o1d" name_in_code="o1d" array_group="chapman" units="kg m^{-3} s^{-1}"
+                             description="Tendency of excited atomic oxygen O(1D) mass per unit volume divided by d(zeta)/dz"/>
                 </var_array>
 #endif
         </var_struct>
@@ -2132,6 +2177,18 @@
                         <var name="lbc_tracer_3" name_in_code="tracer_3" array_group="passive"
                              units="kg kg^{-1} s^{-1}"
                              description="Lateral boundary tendency of passive tracer 3"/>
+
+                        <var name="lbc_o3" name_in_code="o3" array_group="chapman"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of ozone"/>
+
+                        <var name="lbc_o" name_in_code="o" array_group="chapman"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of atomic oxygen"/>
+
+                        <var name="lbc_o1d" name_in_code="o1d" array_group="chapman"
+                             units="kg kg^{-1} s^{-1}"
+                             description="Lateral boundary tendency of excited atomic oxygen O(1D)"/>
                 </var_array>
         </var_struct>
 

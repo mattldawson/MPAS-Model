@@ -103,6 +103,8 @@ RUN cd /tmp \
              -DMUSICA_ENABLE_CARMA=OFF \
     && cmake --build build -j"$(nproc)" \
     && cmake --install build \
+    && mkdir -p /usr/local/share/musica/tuvx_data \
+    && cp -r /tmp/musica/configs/tuvx/data/cross_sections /usr/local/share/musica/tuvx_data/ \
     && rm -rf /tmp/musica
 
 # ---------------------------------------------------------------------------
@@ -120,10 +122,12 @@ RUN printf '#!/bin/sh\nexec true\n' \
         > src/core_atmosphere/tools/manage_externals/checkout_externals \
     && chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
 
-# Build init_atmosphere core first, then atmosphere core
+# Build init_atmosphere core first (no MUSICA needed), then atmosphere core
 RUN make -j"$(nproc)" gnu CORE=init_atmosphere USE_PIO2=false \
     && make clean CORE=atmosphere \
-    && make -j"$(nproc)" gnu CORE=atmosphere USE_PIO2=false
+    && make -j"$(nproc)" gnu CORE=atmosphere USE_PIO2=false \
+       MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
+       MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
 
 # ---------------------------------------------------------------------------
 # Stage 3: run — lean runtime image with MPAS executables
@@ -149,6 +153,8 @@ RUN ldconfig
 WORKDIR /mpas
 COPY --from=build /mpas/init_atmosphere_model .
 COPY --from=build /mpas/atmosphere_model .
+COPY --from=build /mpas/chemistry_data chemistry_data/
+COPY --from=build /mpas/scripts scripts/
 
 # ---------------------------------------------------------------------------
 # Stage 4: dev — interactive development (mount source at runtime)

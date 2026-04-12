@@ -21,7 +21,7 @@ OBJS = mpas_atm_core.o \
        mpas_atm_threading.o \
        mpas_atm_halos.o
 
-all: $(PHYSCORE) dycore diagcore atmcore utilities
+all: $(PHYSCORE) dycore diagcore chemcore atmcore utilities
 
 core_reg:
 	$(CPP) $(CPPFLAGS) $(CPPINCLUDES) $(PHYSICS) Registry.xml > Registry_processed.xml
@@ -53,15 +53,18 @@ dycore: mpas_atm_dimensions.o $(PHYSCORE)
 diagcore: $(PHYSCORE) dycore
 	( cd diagnostics; $(MAKE) all PHYSICS="$(PHYSICS)" )
 
+chemcore: dycore
+	( cd chemistry; $(MAKE) all )
+
 utilities: $(PHYSCORE)
 	( cd utils; $(MAKE) all PHYSICS="$(PHYSICS)" )
 
-atmcore: $(PHYSCORE) dycore diagcore $(OBJS)
-	ar -ru libdycore.a $(OBJS) dynamics/*.o $(PHYS_OBJS) diagnostics/*.o
+atmcore: $(PHYSCORE) dycore diagcore chemcore $(OBJS)
+	ar -ru libdycore.a $(OBJS) dynamics/*.o $(PHYS_OBJS) diagnostics/*.o chemistry/*.o
 
 mpas_atm_core_interface.o: mpas_atm_core.o
 
-mpas_atm_core.o: dycore diagcore mpas_atm_threading.o mpas_atm_halos.o
+mpas_atm_core.o: dycore diagcore chemcore mpas_atm_threading.o mpas_atm_halos.o
 
 mpas_atm_dimensions.o:
 
@@ -69,6 +72,7 @@ clean:
 	( cd physics; $(MAKE) clean )
 	( cd dynamics; $(MAKE) clean )
 	( cd diagnostics; $(MAKE) clean )
+	( cd chemistry; $(MAKE) clean )
 	( cd utils; $(MAKE) clean )
 	( cd ../..; rm -f *TBL )
 	( cd ../..; rm -f *DATA* )
@@ -84,7 +88,7 @@ clean:
 	$(RM) $@ $*.mod
 ifeq "$(GEN_F90)" "true"
 	$(CPP) $(CPPFLAGS) $(PHYSICS) $(CPPINCLUDES) -I./inc $< > $*.f90
-	$(FC) $(FFLAGS) -c $*.f90 $(FCINCLUDES) -I../framework -I../operators -I./physics -I./dynamics -I./diagnostics -I./physics/physics_wrf -I./physics/physics_mmm -I./physics/physics_noaa/UGWP -I../external/esmf_time_f90
+	$(FC) $(FFLAGS) -c $*.f90 $(FCINCLUDES) -I../framework -I../operators -I./physics -I./dynamics -I./diagnostics -I./chemistry -I./physics/physics_wrf -I./physics/physics_mmm -I./physics/physics_noaa/UGWP -I../external/esmf_time_f90
 else
-	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $*.F $(CPPINCLUDES) $(FCINCLUDES) -I./inc -I../framework -I../operators -I./physics -I./dynamics -I./diagnostics -I./physics/physics_wrf -I./physics/physics_mmm -I./physics/physics_noaa/UGWP -I../external/esmf_time_f90
+	$(FC) $(CPPFLAGS) $(PHYSICS) $(FFLAGS) -c $*.F $(CPPINCLUDES) $(FCINCLUDES) -I./inc -I../framework -I../operators -I./physics -I./dynamics -I./diagnostics -I./chemistry -I./physics/physics_wrf -I./physics/physics_mmm -I./physics/physics_noaa/UGWP -I../external/esmf_time_f90
 endif
