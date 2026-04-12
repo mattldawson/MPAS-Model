@@ -40,8 +40,8 @@ if [ ! -f "${GRID_FILE}" ]; then
     exit 1
 fi
 
-# Create working directory
-WORK_DIR="${MPAS_DIR}/data/jw_480km"
+# Create working directory (mechanism-specific)
+WORK_DIR="${MPAS_DIR}/data/jw_480km_${MECHANISM}"
 rm -rf "${WORK_DIR}"
 mkdir -p "${WORK_DIR}"
 cd "${WORK_DIR}"

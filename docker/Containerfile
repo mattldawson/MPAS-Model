@@ -116,13 +116,17 @@ WORKDIR /mpas
 COPY . .
 
 # Fetch physics externals directly (avoids fragile manage_externals tool)
-RUN git clone --depth 1 --branch 20250616-MPASv8.3 \
+# rm -rf first in case COPY brought in a prior local checkout
+RUN rm -rf src/core_atmosphere/physics/physics_mmm \
+    && git clone --depth 1 --branch 20250616-MPASv8.3 \
         https://github.com/NCAR/MMM-physics.git \
         src/core_atmosphere/physics/physics_mmm \
+    && rm -rf src/core_atmosphere/physics/physics_noaa/UGWP \
     && mkdir -p src/core_atmosphere/physics/physics_noaa \
     && git clone --depth 1 --branch MPAS_20241223 \
         https://github.com/NOAA-GSL/UGWP.git \
         src/core_atmosphere/physics/physics_noaa/UGWP \
+    && rm -rf src/core_atmosphere/physics/physics_wrf/files \
     && mkdir -p src/core_atmosphere/physics/physics_wrf/files \
     && cd src/core_atmosphere/physics/physics_wrf/files \
     && wget -q https://github.com/MPAS-Dev/MPAS-Data/archive/refs/tags/v8.2.tar.gz \

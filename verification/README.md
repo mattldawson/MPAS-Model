@@ -48,7 +48,9 @@ script writes output to a single directory used by all current phases:
 
 ```
 data/
-  jw_480km/output.nc   ← Phases 0, 1, and 2 (includes tracers + chemistry species)
+  jw_480km_chapman/output.nc    ← Phases 0, 1, 2, and 3 (Chapman chemistry)
+  jw_480km_analytical/output.nc ← Phase 3 (analytical A→B→C mechanism)
+  jw_480km -> jw_480km_chapman  ← symlink for backward compatibility
 ```
 
 The output contains all registered scalars (`tracer_1`, `tracer_2`, `tracer_3`,

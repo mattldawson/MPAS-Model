@@ -96,19 +96,31 @@ else
     bash scripts/download_data.sh data
 fi
 
-# ---------- Step 5: Run JW test ----------------------------------------------
-step "Step 5/5: Run JW baroclinic wave test (${NPROCS} MPI ranks)"
-if [ -f data/jw_480km/output.nc ]; then
-    echo "  output.nc already exists — delete data/jw_480km/ to re-run"
+# ---------- Step 5: Run JW tests ---------------------------------------------
+step "Step 5/6: Run JW baroclinic wave test — chapman (${NPROCS} MPI ranks)"
+if [ -f data/jw_480km_chapman/output.nc ]; then
+    echo "  output.nc already exists — delete data/jw_480km_chapman/ to re-run"
     skip
 else
     ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
-        bash scripts/run_jw_test.sh "${NPROCS}"
+        bash scripts/run_jw_test.sh "${NPROCS}" chapman
 fi
+
+step "Step 6/6: Run JW baroclinic wave test — analytical (${NPROCS} MPI ranks)"
+if [ -f data/jw_480km_analytical/output.nc ]; then
+    echo "  output.nc already exists — delete data/jw_480km_analytical/ to re-run"
+    skip
+else
+    ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
+        bash scripts/run_jw_test.sh "${NPROCS}" analytical
+fi
+
+# Backward-compatible symlink for phases 0-2 (which expect data/jw_480km/)
+ln -sfn jw_480km_chapman data/jw_480km
 
 # ---------- Done -------------------------------------------------------------
 step "Done"
-echo "  Output: data/jw_480km/output.nc"
-ls -lh data/jw_480km/output.nc
+echo "  Output:"
+ls -lh data/jw_480km_chapman/output.nc data/jw_480km_analytical/output.nc
 echo ""
 echo "  To view results:  jupyter notebook verification/"
