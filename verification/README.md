@@ -12,28 +12,37 @@ cd MPAS-Model
 podman build -f docker/Containerfile --target deps -t chempas-deps .
 podman build -f docker/Containerfile --target dev  -t chempas-dev  .
 
-# 2. Build MPAS inside the container
+# 2. Fetch physics externals (only needed once after a fresh clone)
+#    This downloads MMM-physics, NOAA UGWP, and WRF physics lookup tables.
+podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
+  cd src/core_atmosphere && tools/manage_externals/checkout_externals --externals Externals.cfg
+  cd physics && ./checkout_data_files.sh
+'
+
+# 3. Build MPAS inside the container
 podman run --rm -v "$(pwd):/mpas:Z" -w /mpas localhost/chempas-dev bash -c '
   printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/tools/manage_externals/checkout_externals
   chmod +x src/core_atmosphere/tools/manage_externals/checkout_externals
+  printf "#!/bin/sh\nexec true\n" > src/core_atmosphere/physics/checkout_data_files.sh
+  chmod +x src/core_atmosphere/physics/checkout_data_files.sh
   make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
     MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
     MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
 '
 
-# 3. Run the JW test (produces data/jw_480km/output.nc)
+# 4. Run the JW test (produces data/jw_480km/output.nc)
 podman run --rm \
     -v "$(pwd):/mpas:Z" \
     -v "$(pwd)/../configs:/mpas/../configs:Z" \
     -w /mpas localhost/chempas-dev \
     bash scripts/run_jw_test.sh 1
 
-# 4. Set up a Python virtual environment
+# 5. Set up a Python virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r verification/requirements.txt
 
-# 5. Open the notebooks
+# 6. Open the notebooks
 jupyter notebook verification/
 # — or open in VS Code —
 ```
