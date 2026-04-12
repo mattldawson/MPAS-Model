@@ -60,19 +60,47 @@ done
 
 # Link chemistry configuration data
 cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
-# TUV-x data files: shared config at chemistry_data/tuvx/
+# TUV-x data files: the NetCDF cross-section and quantum-yield files are large
+# and not bundled in the MPAS-Model repo.  They are installed by the MUSICA
+# build into the container at /usr/local/share/musica/tuvx_data/, or can be
+# pointed to explicitly via MUSICA_TUVX_DATA.
 if [ -d "chemistry_data/tuvx" ]; then
-    MUSICA_DATA="${MPAS_DIR}/../configs/tuvx/data"
-    if [ -d "${MUSICA_DATA}" ]; then
+    TUVX_DATA_LINKED=false
+    # Try 1: explicit env var (highest priority)
+    if [ -n "${MUSICA_TUVX_DATA:-}" ] && \
+       [ -d "${MUSICA_TUVX_DATA}/cross_sections" ] && \
+       [ -d "${MUSICA_TUVX_DATA}/quantum_yields" ]; then
         mkdir -p chemistry_data/tuvx/data
-        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/cross_sections" chemistry_data/tuvx/data/cross_sections
-        ln -sf "$(cd "${MUSICA_DATA}" && pwd)/quantum_yields" chemistry_data/tuvx/data/quantum_yields
-    elif [ -d "/usr/local/share/musica/tuvx_data" ]; then
+        ln -sf "${MUSICA_TUVX_DATA}/cross_sections" chemistry_data/tuvx/data/cross_sections
+        ln -sf "${MUSICA_TUVX_DATA}/quantum_yields" chemistry_data/tuvx/data/quantum_yields
+        TUVX_DATA_LINKED=true
+    fi
+    # Try 2: container-installed location (normal case)
+    if [ "${TUVX_DATA_LINKED}" = false ] && \
+       [ -d "/usr/local/share/musica/tuvx_data/cross_sections" ] && \
+       [ -d "/usr/local/share/musica/tuvx_data/quantum_yields" ]; then
         mkdir -p chemistry_data/tuvx/data
         ln -sf "/usr/local/share/musica/tuvx_data/cross_sections" chemistry_data/tuvx/data/cross_sections
         ln -sf "/usr/local/share/musica/tuvx_data/quantum_yields" chemistry_data/tuvx/data/quantum_yields
-    else
-        echo "WARNING: TUV-x data files not found. Photolysis chemistry may fail." >&2
+        TUVX_DATA_LINKED=true
+    fi
+    if [ "${TUVX_DATA_LINKED}" = false ]; then
+        echo "ERROR: TUV-x data files not found." >&2
+        echo "  Tried: MUSICA_TUVX_DATA=${MUSICA_TUVX_DATA:-<unset>}" >&2
+        echo "  Tried: /usr/local/share/musica/tuvx_data/" >&2
+        echo "  Fix: rebuild the container (the MUSICA build installs TUV-x data" >&2
+        echo "  at /usr/local/share/musica/tuvx_data/), or set MUSICA_TUVX_DATA" >&2
+        echo "  to a directory containing cross_sections/ and quantum_yields/." >&2
+        exit 1
+    fi
+    # Sanity-check: verify a known data file is reachable through the symlinks
+    TUVX_PROBE="chemistry_data/tuvx/data/quantum_yields/NO2_1.nc"
+    if [ ! -f "${TUVX_PROBE}" ]; then
+        echo "ERROR: TUV-x data linked but probe file missing: ${TUVX_PROBE}" >&2
+        echo "  Symlink targets may be stale.  Rebuild the container image:" >&2
+        echo "    ${CONTAINER_RT:-podman} rmi localhost/chempas-dev" >&2
+        echo "    bash scripts/setup_and_run.sh" >&2
+        exit 1
     fi
 fi
 

@@ -8,10 +8,17 @@
 # Idempotent — always rebuilds from clean to avoid stale-artifact issues.
 # Only the container image and mesh download are cached (slow to fetch).
 #
-# Usage:  bash scripts/setup_and_run.sh [NPROCS]
+# Usage:  bash scripts/setup_and_run.sh [--force-rebuild] [NPROCS]
+#   --force-rebuild: delete and rebuild the container image
 #   NPROCS: MPI ranks for the JW test (default: 1)
 # =============================================================================
 set -euo pipefail
+
+FORCE_REBUILD=false
+if [ "${1:-}" = "--force-rebuild" ]; then
+    FORCE_REBUILD=true
+    shift
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -26,9 +33,20 @@ step()  { echo ""; echo "====== $* ======"; }
 
 # ---------- Step 1: Build container image ------------------------------------
 step "Step 1/7: Build chempas-dev container image"
+if [ "${FORCE_REBUILD}" = true ]; then
+    echo "  (--force-rebuild: removing existing image)"
+    ${CONTAINER_RT} rmi -f "${IMAGE}" 2>/dev/null || true
+fi
 if ${CONTAINER_RT} image exists "${IMAGE}" 2>/dev/null; then
     echo "  (image exists — skipping build)"
 else
+    ${CONTAINER_RT} build -f docker/Containerfile --target dev -t chempas-dev .
+fi
+
+# Validate the container has required TUV-x data
+if ! ${CONTAINER_RT} run --rm "${IMAGE}" test -d /usr/local/share/musica/tuvx_data/quantum_yields; then
+    echo "  Container image is stale (missing TUV-x data). Rebuilding..."
+    ${CONTAINER_RT} rmi -f "${IMAGE}" 2>/dev/null || true
     ${CONTAINER_RT} build -f docker/Containerfile --target dev -t chempas-dev .
 fi
 
@@ -69,15 +87,23 @@ ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" bash -c '
     # Clean everything first to avoid stale object files
     make clean CORE=atmosphere 2>/dev/null || true
 
+    # MPAS Makefile has incomplete dependency tracking; high parallelism
+    # can cause race conditions.  Cap at 8 and retry once on failure.
+    JLEVEL=$(( $(nproc) > 8 ? 8 : $(nproc) ))
+
     # Build atmosphere core (needs MUSICA flags)
-    make -j$(nproc) gnu CORE=atmosphere USE_PIO2=false \
+    make -j${JLEVEL} gnu CORE=atmosphere USE_PIO2=false \
+        MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
+        MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)" \
+    || make -j${JLEVEL} gnu CORE=atmosphere USE_PIO2=false \
         MPAS_EXTERNAL_LIBS="$(pkg-config --libs musica-fortran) -lstdc++" \
         MPAS_EXTERNAL_INCLUDES="$(pkg-config --cflags musica-fortran)"
     # Save atmosphere_model — AUTOCLEAN below will remove it
     cp atmosphere_model /tmp/atmosphere_model
     # Build init_atmosphere core (AUTOCLEAN re-compiles the shared
     # framework that was built with different options above)
-    make -j$(nproc) gnu CORE=init_atmosphere USE_PIO2=false AUTOCLEAN=true
+    make -j${JLEVEL} gnu CORE=init_atmosphere USE_PIO2=false AUTOCLEAN=true \
+    || make -j${JLEVEL} gnu CORE=init_atmosphere USE_PIO2=false AUTOCLEAN=true
     # Restore atmosphere_model
     cp /tmp/atmosphere_model atmosphere_model
 '
