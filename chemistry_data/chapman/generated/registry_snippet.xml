@@ -1,8 +1,0 @@
-<!-- Auto-generated for mechanism: chapman -->
-<package name="chem_chapman_in"
-         description="Chemistry species for chapman mechanism"/>
-
-<!-- Add these inside the scalars var_array in Registry.xml -->
-<var name="o" array_group="chem_chapman" units="kg kg^{-1}" description="O mass mixing ratio" packages="chem_chapman_in"/>
-<var name="o1d" array_group="chem_chapman" units="kg kg^{-1}" description="O1D mass mixing ratio" packages="chem_chapman_in"/>
-<var name="o3" array_group="chem_chapman" units="kg kg^{-1}" description="O3 mass mixing ratio" packages="chem_chapman_in"/>

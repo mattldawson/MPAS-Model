@@ -1187,30 +1187,6 @@
 
                         <var name="tracer_3" array_group="passive" units="kg kg^{-1}"
                              description="Passive tracer 3: Surface-concentrated for vertical advection testing"/>
-
-                        <var name="o3" array_group="chapman" units="kg kg^{-1}"
-                             description="Ozone mass mixing ratio"/>
-
-                        <var name="o" array_group="chapman" units="kg kg^{-1}"
-                             description="Atomic oxygen mass mixing ratio"/>
-
-                        <var name="o1d" array_group="chapman" units="kg kg^{-1}"
-                             description="Excited atomic oxygen O(1D) mass mixing ratio"/>
-
-                        <var name="foo" array_group="emis_dep" units="kg kg^{-1}"
-                             description="Test emitted species"/>
-
-                        <var name="bar" array_group="emis_dep" units="kg kg^{-1}"
-                             description="Test deposited species"/>
-
-                        <var name="a" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species A"/>
-
-                        <var name="b" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species B"/>
-
-                        <var name="c" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species C"/>
                 </var_array>
 
                 <!-- Climatology for ocean mixed-layer depth -->
@@ -1262,24 +1238,6 @@
 
                         <var name="lbc_tracer_3" array_group="passive" units="kg kg^{-1}"
                              description="Passive tracer 3 on lateral boundary cells"/>
-
-                        <var name="lbc_o3" array_group="chapman" units="kg kg^{-1}"
-                             description="Ozone on lateral boundary cells"/>
-
-                        <var name="lbc_o" array_group="chapman" units="kg kg^{-1}"
-                             description="Atomic oxygen on lateral boundary cells"/>
-
-                        <var name="lbc_o1d" array_group="chapman" units="kg kg^{-1}"
-                             description="Excited atomic oxygen O(1D) on lateral boundary cells"/>
-
-                        <var name="lbc_a" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species A on lateral boundary cells"/>
-
-                        <var name="lbc_b" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species B on lateral boundary cells"/>
-
-                        <var name="lbc_c" array_group="analytical" units="kg kg^{-1}"
-                             description="Analytical test species C on lateral boundary cells"/>
                 </var_array>
 
         </var_struct>

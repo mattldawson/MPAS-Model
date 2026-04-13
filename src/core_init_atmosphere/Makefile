@@ -1,6 +1,7 @@
-.SUFFIXES: .F .o
+.SUFFIXES: .F .F90 .o
 
 OBJS =  \
+	mpas_chemistry_allocate.o \
 	mpas_init_atm_core.o \
 	mpas_init_atm_core_interface.o \
 	mpas_init_atm_cases.o \
@@ -88,7 +89,11 @@ mpas_kd_tree.o:
 
 mpas_init_atm_llxy.o:
 
-mpas_init_atm_core_interface.o: mpas_init_atm_core.o
+mpas_init_atm_core_interface.o: mpas_init_atm_core.o mpas_chemistry_allocate.o
+
+mpas_chemistry_allocate.o:
+	$(RM) $@ $*.mod
+	$(FC) $(CPPFLAGS) $(FFLAGS) -c ../core_atmosphere/chemistry/mpas_chemistry_allocate.F90 $(CPPINCLUDES) $(FCINCLUDES) -I./inc -I../framework -I../operators -I../external/esmf_time_f90
 
 mpas_init_atm_core.o: mpas_advection.o mpas_init_atm_cases.o
 

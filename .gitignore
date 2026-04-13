@@ -71,3 +71,7 @@ data/
 
 # Python virtual environment
 .venv/
+
+# Generated chemistry files (derived from JSON configs at run time)
+chemistry_data/*/advected_species.txt
+chemistry_data/*/generated/

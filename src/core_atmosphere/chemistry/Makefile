@@ -1,6 +1,7 @@
 .SUFFIXES: .F .F90 .o
 
-OBJS = mpas_chemistry_utils.o \
+OBJS = mpas_chemistry_allocate.o \
+       mpas_chemistry_utils.o \
        mpas_chemistry_species.o \
        mpas_chemistry_emissions.o \
        mpas_chemistry_deposition.o \
@@ -12,6 +13,8 @@ OBJS = mpas_chemistry_utils.o \
 all: $(OBJS)
 
 # Dependencies
+mpas_chemistry_allocate.o:
+
 mpas_chemistry_species.o:
 
 mpas_chemistry_emissions.o:

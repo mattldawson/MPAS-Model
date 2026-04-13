@@ -132,10 +132,6 @@ module atm_core_interface
       logical, pointer :: config_ugwp_diags
       character(len=StrKIND) :: attvalue
       integer :: local_ierr
-      character(len=StrKIND), pointer :: config_chemistry_config_path
-      logical, pointer :: chem_pkg_ptr
-      character(len=StrKIND) :: chem_config_path, mechanism_name, package_name
-      integer :: path_len, last_slash
 
 
       ierr = atm_setup_packages_when(configs, packages)
@@ -208,37 +204,6 @@ module atm_core_interface
          ierr = ierr + 1
          call mpas_log_write("Package setup failed for 'no_invariant_stream'. 'no_invariant_stream' is not a package.", &
                              messageType=MPAS_LOG_ERR)
-      end if
-
-      !
-      ! Chemistry mechanism species packages
-      ! Convention: config_chemistry_config_path basename → chem_<basename>_inActive
-      !
-      nullify(config_chemistry_config_path)
-      call mpas_pool_get_config(configs, 'config_chemistry_config_path', config_chemistry_config_path)
-
-      if (associated(config_chemistry_config_path) .and. &
-          len_trim(config_chemistry_config_path) > 0) then
-         chem_config_path = trim(config_chemistry_config_path)
-         ! Strip trailing slash if present
-         path_len = len_trim(chem_config_path)
-         if (path_len > 0 .and. chem_config_path(path_len:path_len) == '/') then
-            path_len = path_len - 1
-         end if
-         ! Extract basename (everything after last '/')
-         last_slash = index(chem_config_path(1:path_len), '/', back=.true.)
-         mechanism_name = chem_config_path(last_slash+1:path_len)
-         ! Construct and activate package
-         package_name = 'chem_' // trim(mechanism_name) // '_inActive'
-         nullify(chem_pkg_ptr)
-         call mpas_pool_get_package(packages, trim(package_name), chem_pkg_ptr)
-         if (associated(chem_pkg_ptr)) then
-            chem_pkg_ptr = .true.
-         else
-            ierr = ierr + 1
-            call mpas_log_write('Chemistry package "' // trim(package_name) // &
-                                '" not found in Registry.', messageType=MPAS_LOG_ERR)
-         end if
       end if
 
 #ifdef DO_PHYSICS
@@ -498,6 +463,7 @@ module atm_core_interface
       use mpas_derived_types, only : block_type
       use mpas_pool_routines, only : mpas_pool_get_config
       use mpas_log, only : mpas_log_write
+      use mpas_chemistry_allocate, only : chemistry_allocate_scalars
 
       implicit none
 
@@ -506,6 +472,8 @@ module atm_core_interface
 
       integer, pointer :: cam_pcnst
       integer :: err_level
+      character(len=512) :: chem_errmsg
+      integer :: chem_errcode
 
       ierr = 0
 
@@ -528,6 +496,17 @@ module atm_core_interface
          call mpas_log_write('   Scalars will be allocated separately from Registry-defined variables')
          call mpas_log_write('')
          ierr = atm_allocate_scalars(block, cam_pcnst)
+      end if
+
+      !
+      ! Extend scalars and scalars_tend with chemistry species (if configured).
+      ! Reads advected_species.txt from the chemistry config directory and
+      ! appends those species to the Registry-defined var_arrays.
+      !
+      call chemistry_allocate_scalars(block, .true., chem_errmsg, chem_errcode)
+      if (chem_errcode /= 0) then
+         call mpas_log_write(trim(chem_errmsg), messageType=MPAS_LOG_CRIT)
+         ierr = chem_errcode
       end if
 
    end function atm_setup_block

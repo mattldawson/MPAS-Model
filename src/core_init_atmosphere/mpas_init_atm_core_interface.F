@@ -508,16 +508,31 @@ module init_atm_core_interface
    !-----------------------------------------------------------------------
    function init_atm_setup_block(block) result(ierr)
 
-      use mpas_derived_types, only : block_type
+      use mpas_derived_types, only : block_type, MPAS_LOG_CRIT
+      use mpas_log, only : mpas_log_write
+      use mpas_chemistry_allocate, only : chemistry_allocate_scalars
 
       implicit none
 
       type (block_type), pointer :: block
       integer :: ierr
 
+      character(len=512) :: chem_errmsg
+      integer :: chem_errcode
+
       ierr = 0
 
       call init_atm_generate_structs(block, block % structs, block % dimensions, block % packages)
+
+      !
+      ! Extend scalars with chemistry species (if configured).
+      ! init_atmosphere only has scalars (no scalars_tend).
+      !
+      call chemistry_allocate_scalars(block, .false., chem_errmsg, chem_errcode)
+      if (chem_errcode /= 0) then
+         call mpas_log_write(trim(chem_errmsg), messageType=MPAS_LOG_CRIT)
+         ierr = chem_errcode
+      end if
 
    end function init_atm_setup_block
 
