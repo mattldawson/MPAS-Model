@@ -88,7 +88,10 @@ python3 "${MPAS_DIR}/scripts/generate_advected_species.py" "chemistry_data/${MEC
 # and not bundled in the MPAS-Model repo.  They are installed by the MUSICA
 # build into the container at /usr/local/share/musica/tuvx_data/, or can be
 # pointed to explicitly via MUSICA_TUVX_DATA.
-if [ -d "chemistry_data/tuvx" ]; then
+# TUV-x config lives inside each mechanism folder (e.g., chemistry_data/chapman/tuvx/config.json).
+# Mechanisms without a tuvx/ subfolder (e.g., analytical) skip TUV-x entirely.
+# Data files are symlinked into chemistry_data/tuvx/data/ (the path referenced by configs).
+if [ -d "chemistry_data/${MECHANISM}/tuvx" ]; then
     TUVX_DATA_LINKED=false
     # Try 1: explicit env var (highest priority)
     if [ -n "${MUSICA_TUVX_DATA:-}" ] && \

@@ -70,7 +70,7 @@ contains
       character(len=512) :: micm_config_path, tuvx_config_path
       character(len=512) :: errmsg
       logical :: file_exists
-      integer :: errcode, r, n_grid_cells
+      integer :: errcode, n_grid_cells
       type(error_t) :: error
 
       call mpas_pool_get_config(domain % blocklist % configs, &
@@ -101,14 +101,9 @@ contains
          micm_config_path = trim(config_chemistry_config_path) // '/micm/config.json'
       end if
 
-      ! TUV-x: shared config at sibling 'tuvx/' directory of the mechanism
-      ! e.g., chemistry_data/chapman → chemistry_data/tuvx/config.json
-      r = index(trim(config_chemistry_config_path), '/', back=.true.)
-      if (r > 0) then
-         tuvx_config_path = config_chemistry_config_path(1:r) // 'tuvx/config.json'
-      else
-         tuvx_config_path = 'tuvx/config.json'
-      end if
+      ! TUV-x: mechanism-specific config at <mechanism>/tuvx/config.json
+      ! e.g., chemistry_data/chapman/tuvx/config.json
+      tuvx_config_path = trim(config_chemistry_config_path) // '/tuvx/config.json'
 
       ! Get mesh dimensions from first block
       call mpas_pool_get_subpool(domain % blocklist % structs, 'mesh', mesh)
