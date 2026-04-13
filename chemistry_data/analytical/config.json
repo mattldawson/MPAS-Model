@@ -1,0 +1,66 @@
+{
+  "version": "1.0.0",
+  "name": "Analytical Test",
+  "species": [
+    {
+      "name": "A",
+      "molecular weight [kg mol-1]": 0.028,
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true
+    },
+    {
+      "name": "B",
+      "molecular weight [kg mol-1]": 0.028,
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true
+    },
+    {
+      "name": "C",
+      "molecular weight [kg mol-1]": 0.028,
+      "__absolute tolerance": 1e-12,
+      "__is_advected": true
+    }
+  ],
+  "phases": [
+    {
+      "name": "gas",
+      "species": [
+        {"name": "A"},
+        {"name": "B"},
+        {"name": "C"}
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "type": "ARRHENIUS",
+      "A": 1e-4,
+      "B": 0.0,
+      "C": 0.0,
+      "D": 300.0,
+      "E": 0.0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "A", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "B", "coefficient": 1}
+      ]
+    },
+    {
+      "type": "ARRHENIUS",
+      "A": 5e-5,
+      "B": 0.0,
+      "C": 0.0,
+      "D": 300.0,
+      "E": 0.0,
+      "gas phase": "gas",
+      "reactants": [
+        {"species name": "B", "coefficient": 1}
+      ],
+      "products": [
+        {"species name": "C", "coefficient": 1}
+      ]
+    }
+  ]
+}
