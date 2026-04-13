@@ -88,6 +88,7 @@ contains
       integer, pointer :: idx_ptr
       character(len=128) :: species_name, mpas_name
       real (kind=real64) :: vmr_val, mw_val, sh_val
+      logical :: is_advected
 
       ! Temporary arrays (allocatable, sized to n_species)
       integer, allocatable :: tmp_adv_mpas(:), tmp_adv_micm(:)
@@ -167,6 +168,16 @@ contains
          if (.not. error%is_success()) then
             call mpas_log_write('[CheMPAS]   Skipping ' // trim(species_name) &
                                 // ' (no molar mass)')
+            cycle
+         end if
+
+         ! Check if explicitly marked as advected via __is_advected property.
+         ! Species with MW but without __is_advected are MICM-internal
+         ! (short-lived radicals, third body, etc.) and do not get MPAS scalars.
+         is_advected = micm_solver%get_species_property_bool( &
+            trim(species_name), '__is_advected', error)
+         if (.not. error%is_success() .or. .not. is_advected) then
+            call mpas_log_write('[CheMPAS]   MICM-internal: ' // trim(species_name))
             cycle
          end if
 

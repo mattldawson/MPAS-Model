@@ -30,6 +30,8 @@ module mpas_chemistry_driver
                                          emissions_cleanup
    use mpas_chemistry_deposition, only : deposition_init, deposition_set_rates, &
                                          deposition_cleanup
+   use mpas_chemistry_static_rates, only : static_rates_init, static_rates_set, &
+                                            static_rates_cleanup
 
    implicit none
 
@@ -185,6 +187,14 @@ contains
 
       if (chem_dt <= 0.0_real64) then
          call mpas_log_write('[CheMPAS] config_chemistry_dt <= 0; using dynamics dt')
+      end if
+
+      ! --- Load static rate parameters (optional CSV) ---
+      call static_rates_init(trim(config_chemistry_config_path), micm_state, &
+                              n_photo_rxns_local, photo_mapping, errmsg, errcode)
+      if (errcode /= 0) then
+         call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
+         return
       end if
 
       call mpas_log_write('[CheMPAS] Chemistry initialization complete')
@@ -409,13 +419,19 @@ contains
                                      micm_state%rate_parameters_strides%variable,  &
                                      0, nCellsSolve * nVertLevels)
 
-         ! === Phase 2b: Set emission rate parameters ===
+         ! === Phase 2b: Set static rate parameters (constant USER_DEFINED) ===
+         call static_rates_set(nCellsSolve * nVertLevels, &
+                                micm_state%rate_parameters, &
+                                micm_state%rate_parameters_strides%grid_cell, &
+                                micm_state%rate_parameters_strides%variable)
+
+         ! === Phase 2c: Set emission rate parameters ===
          call emissions_set_rates(nCellsSolve, nVertLevels, zgrid, &
                                   micm_state%rate_parameters, &
                                   micm_state%rate_parameters_strides%grid_cell, &
                                   micm_state%rate_parameters_strides%variable)
 
-         ! === Phase 2c: Set deposition rate parameters ===
+         ! === Phase 2d: Set deposition rate parameters ===
          call deposition_set_rates(nCellsSolve, nVertLevels, zgrid, &
                                    micm_state%rate_parameters, &
                                    micm_state%rate_parameters_strides%grid_cell, &
@@ -509,6 +525,7 @@ contains
       call chem_species_cleanup()
       call emissions_cleanup()
       call deposition_cleanup()
+      call static_rates_cleanup()
       if (allocated(photo_mapping)) deallocate(photo_mapping)
       chemistry_enabled = .false.
       call mpas_log_write('[CheMPAS] Chemistry finalized')

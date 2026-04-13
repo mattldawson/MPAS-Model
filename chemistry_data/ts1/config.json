@@ -18144,6 +18144,501 @@
         }
       ],
       "gas phase": "gas"
+    },
+    {
+      "type": "EMISSION",
+      "name": "BENZENE",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "BENZENE",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "BIGALK",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "BIGALK",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "BIGENE",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "BIGENE",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "C2H4",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "C2H4",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "C2H5OH",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "C2H5OH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "C2H6",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "C2H6",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "C3H6",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "C3H6",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "C3H8",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "C3H8",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CH2O",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CH2O",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CH3CHO",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CH3CHO",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CH3COCH3",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CH3COCH3",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CH3COOH",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CH3COOH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CH3OH",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CH3OH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "CO",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "CO",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "DMS",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "DMS",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "HCN",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "HCN",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "HCOOH",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "HCOOH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "ISOP",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "ISOP",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "MEK",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "MEK",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "NH3",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "NH3",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "NO",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "NO",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "SO2",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "SO2",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "TOLUENE",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "TOLUENE",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "EMISSION",
+      "name": "XYLENES",
+      "gas phase": "gas",
+      "products": [
+        {
+          "species name": "XYLENES",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "CH2O",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "CH2O",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "CH3CHO",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "CH3CHO",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "CH3COOH",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "CH3COOH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "CH3OOH",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "CH3OOH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "GLYALD",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "GLYALD",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "GLYOXAL",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "GLYOXAL",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "H2O2",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "H2O2",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "H2SO4",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "H2SO4",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "HCL",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "HCL",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "HCOOH",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "HCOOH",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "HNO3",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "HNO3",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "HYAC",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "HYAC",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "MACR",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "MACR",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "MPAN",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "MPAN",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "MVK",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "MVK",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "N2O5",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "N2O5",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "NH3",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "NH3",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "NO2",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "NO2",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "O3",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "O3",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "PAN",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "PAN",
+          "coefficient": 1
+        }
+      ]
+    },
+    {
+      "type": "FIRST_ORDER_LOSS",
+      "name": "SO2",
+      "gas phase": "gas",
+      "reactants": [
+        {
+          "species name": "SO2",
+          "coefficient": 1
+        }
+      ]
     }
   ]
 }

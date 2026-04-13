@@ -250,13 +250,39 @@ def classify_species(ts1_data):
 
 
 def build_config(ts1_data, species_list):
-    """Build MPAS-specific config.json in v1 format."""
+    """Build MPAS-specific config.json in v1 format.
+
+    Appends EMISSION reactions for species in EMISSIONS and
+    FIRST_ORDER_LOSS reactions for species in DEPOSITION.
+    These reactions provide the MICM rate parameters (EMIS.<name>,
+    LOSS.<name>) that the MPAS emissions/deposition modules set.
+    """
+    reactions = list(ts1_data["reactions"])
+
+    # Add EMISSION reactions
+    for name in sorted(EMISSIONS):
+        reactions.append({
+            "type": "EMISSION",
+            "name": name,
+            "gas phase": "gas",
+            "products": [{"species name": name, "coefficient": 1}],
+        })
+
+    # Add FIRST_ORDER_LOSS reactions
+    for name in sorted(DEPOSITION):
+        reactions.append({
+            "type": "FIRST_ORDER_LOSS",
+            "name": name,
+            "gas phase": "gas",
+            "reactants": [{"species name": name, "coefficient": 1}],
+        })
+
     config = {
         "version": ts1_data["version"],
         "name": ts1_data["name"] + " (MPAS-adapted)",
         "species": species_list,
         "phases": ts1_data["phases"],
-        "reactions": ts1_data["reactions"],
+        "reactions": reactions,
     }
     return config
 

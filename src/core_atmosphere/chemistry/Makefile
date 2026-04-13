@@ -5,6 +5,7 @@ OBJS = mpas_chemistry_allocate.o \
        mpas_chemistry_species.o \
        mpas_chemistry_emissions.o \
        mpas_chemistry_deposition.o \
+       mpas_chemistry_static_rates.o \
        mpas_chemistry_state.o \
        mpas_chemistry_tuvx.o \
        mpas_chemistry_micm.o \
@@ -21,6 +22,8 @@ mpas_chemistry_emissions.o:
 
 mpas_chemistry_deposition.o:
 
+mpas_chemistry_static_rates.o:
+
 mpas_chemistry_state.o: mpas_chemistry_species.o
 
 mpas_chemistry_utils.o:
@@ -32,7 +35,7 @@ mpas_chemistry_micm.o:
 mpas_chemistry_driver.o: mpas_chemistry_micm.o mpas_chemistry_tuvx.o \
                           mpas_chemistry_state.o mpas_chemistry_utils.o \
                           mpas_chemistry_species.o mpas_chemistry_emissions.o \
-                          mpas_chemistry_deposition.o
+                          mpas_chemistry_deposition.o mpas_chemistry_static_rates.o
 
 clean:
 	$(RM) *.o *.mod *.f90
