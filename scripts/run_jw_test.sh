@@ -6,13 +6,13 @@
 #   - 480-km mesh downloaded (scripts/download_data.sh)
 #
 # Usage: ./scripts/run_jw_test.sh [NPROCS] [MECHANISM]
-#   NPROCS:    number of MPI ranks (default: 1)
+#   NPROCS:    number of MPI ranks (default: nproc)
 #   MECHANISM: chemistry mechanism — "chapman" or "analytical" (default: chapman)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-NPROCS="${1:-1}"
+NPROCS="${1:-$(nproc)}"
 MECHANISM="${2:-chapman}"
 
 # Chemistry config path: convention-based (single directory)
@@ -38,6 +38,25 @@ GRID_FILE="${MESH_DIR}/x1.2562.grid.nc"
 if [ ! -f "${GRID_FILE}" ]; then
     echo "ERROR: ${GRID_FILE} not found. Run scripts/download_data.sh first." >&2
     exit 1
+fi
+
+# Find the best available partition file for the requested NPROCS.
+# MPAS requires a graph partition file (x1.2562.graph.info.part.N) that matches
+# the number of MPI ranks exactly.  If no partition exists for the requested
+# count, fall back to the largest available partition that doesn't exceed it.
+GRAPH_INFO="${MESH_DIR}/x1.2562.graph.info"
+BEST_NPROCS=1
+for f in "${GRAPH_INFO}.part."*; do
+    [ -f "$f" ] || continue
+    N="${f##*.part.}"
+    if [[ "$N" =~ ^[0-9]+$ ]] && (( N <= NPROCS && N > BEST_NPROCS )); then
+        BEST_NPROCS=$N
+    fi
+done
+if (( BEST_NPROCS < NPROCS )); then
+    echo "NOTE: No partition file for ${NPROCS} ranks; using ${BEST_NPROCS} ranks instead"
+    echo "  (available partitions: $(ls "${GRAPH_INFO}.part."* 2>/dev/null | sed 's/.*part\.//' | sort -n | tr '\n' ' '))"
+    NPROCS=${BEST_NPROCS}
 fi
 
 # Create working directory (mechanism-specific)
