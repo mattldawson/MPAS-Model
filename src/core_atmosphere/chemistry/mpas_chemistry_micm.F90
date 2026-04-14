@@ -1,14 +1,17 @@
 ! Copyright (C) 2025 University Corporation for Atmospheric Research
 ! SPDX-License-Identifier: Apache-2.0
 !
-! MICM interface for MPAS-A chemistry coupling (Chapman mechanism).
+! MICM interface for MPAS-A chemistry coupling.
 ! Creates MICM solver instance, manages state, and solves chemistry in batches.
+! Auto-detects solver type: DAE4 when cloud chemistry is present (mpas_cloud_water.txt),
+! otherwise standard Rosenbrock.
 !
 module mpas_chemistry_micm
 
    use mpas_kind_types,  only : RKIND
    use iso_fortran_env,  only : real64
-   use musica_micm,      only : micm_t, RosenbrockStandardOrder, solver_stats_t
+   use musica_micm,      only : micm_t, RosenbrockStandardOrder, &
+                                RosenbrockDAE4StandardOrder, solver_stats_t
    use musica_state,     only : state_t, conditions_t
    use musica_util,      only : error_t, mappings_t, string_t
 
@@ -17,6 +20,7 @@ module mpas_chemistry_micm
    private
    public :: micm_setup, micm_solve, micm_cleanup
    public :: micm_state, micm_solver_ptr, n_micm_species, n_micm_rate_params
+   public :: using_dae_solver
 
    ! Module-level MICM objects
    type(micm_t),  pointer :: micm_solver => null()
@@ -28,10 +32,18 @@ module mpas_chemistry_micm
    integer :: n_micm_rate_params   = 0
    integer :: max_grid_cells       = 0
 
+   ! Solver type flag
+   logical, save :: using_dae_solver = .false.
+
 contains
 
    !> Initialize MICM solver and allocate state.
+   !! Auto-detects solver type: if mpas_cloud_water.txt exists in the config
+   !! directory, uses RosenbrockDAE4 (for MIAM cloud chemistry).
+   !! Otherwise uses standard Rosenbrock.
    subroutine micm_setup(config_path, n_grid_cells, errmsg, errcode)
+
+      use mpas_log, only : mpas_log_write
 
       character(len=*), intent(in)  :: config_path
       integer,          intent(in)  :: n_grid_cells
@@ -39,12 +51,35 @@ contains
       integer,          intent(out) :: errcode
 
       type(error_t) :: error
+      character(len=512) :: cloud_water_file
+      logical :: has_cloud
+      integer :: solver_type
+      integer :: last_slash
 
       errmsg  = ''
       errcode = 0
 
+      ! Derive config directory from config_path (strip trailing /config.json)
+      last_slash = index(config_path, '/', back=.true.)
+      if (last_slash > 0) then
+         cloud_water_file = config_path(1:last_slash) // 'mpas_cloud_water.txt'
+      else
+         cloud_water_file = 'mpas_cloud_water.txt'
+      end if
+      inquire(file=trim(cloud_water_file), exist=has_cloud)
+
+      if (has_cloud) then
+         solver_type = RosenbrockDAE4StandardOrder
+         using_dae_solver = .true.
+         call mpas_log_write('[CheMPAS] Cloud chemistry detected → DAE4 solver')
+      else
+         solver_type = RosenbrockStandardOrder
+         using_dae_solver = .false.
+         call mpas_log_write('[CheMPAS] Gas-phase only → Rosenbrock solver')
+      end if
+
       ! Create MICM solver
-      micm_solver => micm_t(trim(config_path), RosenbrockStandardOrder, error)
+      micm_solver => micm_t(trim(config_path), solver_type, error)
       if (.not. error%is_success()) then
          errmsg = '[CheMPAS] Failed to create MICM solver: ' // error%message()
          errcode = 1; return

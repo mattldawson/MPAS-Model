@@ -32,6 +32,7 @@ module mpas_chemistry_driver
                                          deposition_cleanup
    use mpas_chemistry_static_rates, only : static_rates_init, static_rates_set, &
                                             static_rates_cleanup
+   use mpas_chemistry_cloud, only : cloud_init, cloud_set_state, cloud_cleanup
 
    implicit none
 
@@ -126,7 +127,8 @@ contains
 
       ! --- Discover species from MICM ---
       call mpas_pool_get_subpool(domain % blocklist % structs, 'state', state)
-      call chem_species_init(state, micm_solver_ptr, micm_state, errmsg, errcode)
+      call chem_species_init(trim(config_chemistry_config_path), &
+                              state, micm_solver_ptr, micm_state, errmsg, errcode)
       if (errcode /= 0) then
          call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
          return
@@ -140,6 +142,14 @@ contains
       end if
 
       call deposition_init(micm_solver_ptr, micm_state, errmsg, errcode)
+      if (errcode /= 0) then
+         call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
+         return
+      end if
+
+      ! --- Initialize cloud chemistry (optional) ---
+      call cloud_init(trim(config_chemistry_config_path), micm_state, &
+                       errmsg, errcode)
       if (errcode /= 0) then
          call mpas_log_write(trim(errmsg), messageType=MPAS_LOG_CRIT)
          return
@@ -414,6 +424,12 @@ contains
                                      micm_state%rate_parameters_strides%variable,  &
                                      0, nCellsSolve * nVertLevels)
 
+         ! === Phase 2a: Set cloud water + default aqueous concentrations ===
+         call cloud_set_state(nCellsSolve, nVertLevels, pres_2d, rho_2d, &
+                               micm_state%concentrations, &
+                               micm_state%species_strides%grid_cell, &
+                               micm_state%species_strides%variable)
+
          ! === Phase 2b: Set static rate parameters (constant USER_DEFINED) ===
          call static_rates_set(nCellsSolve * nVertLevels, &
                                 micm_state%rate_parameters, &
@@ -518,6 +534,7 @@ contains
       call micm_cleanup()
       if (tuvx_enabled) call tuvx_cleanup()
       call chem_species_cleanup()
+      call cloud_cleanup()
       call emissions_cleanup()
       call deposition_cleanup()
       call static_rates_cleanup()

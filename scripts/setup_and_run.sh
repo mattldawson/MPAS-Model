@@ -32,7 +32,7 @@ cd "${MPAS_DIR}"
 step()  { echo ""; echo "====== $* ======"; }
 
 # ---------- Step 1: Build container image ------------------------------------
-step "Step 1/8: Build chempas-dev container image"
+step "Step 1/9: Build chempas-dev container image"
 if [ "${FORCE_REBUILD}" = true ]; then
     echo "  (--force-rebuild: removing existing image)"
     ${CONTAINER_RT} rmi -f "${IMAGE}" 2>/dev/null || true
@@ -51,7 +51,7 @@ if ! ${CONTAINER_RT} run --rm "${IMAGE}" test -d /usr/local/share/musica/tuvx_da
 fi
 
 # ---------- Step 2: Fetch physics externals ----------------------------------
-step "Step 2/8: Fetch physics externals"
+step "Step 2/9: Fetch physics externals"
 
 PHYS="src/core_atmosphere/physics"
 
@@ -73,7 +73,7 @@ tar xzf /tmp/mpas-data-v8.2.tar.gz -C "${PHYS}/physics_wrf/files" \
 rm -f /tmp/mpas-data-v8.2.tar.gz
 
 # ---------- Step 3: Build MPAS -----------------------------------------------
-step "Step 3/8: Build MPAS-A (atmosphere + init_atmosphere)"
+step "Step 3/9: Build MPAS-A (atmosphere + init_atmosphere)"
 rm -f atmosphere_model init_atmosphere_model
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" bash -c '
     set -euo pipefail
@@ -109,7 +109,7 @@ ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" bash -c '
 '
 
 # ---------- Step 4: Download mesh data ---------------------------------------
-step "Step 4/8: Download 480-km mesh"
+step "Step 4/9: Download 480-km mesh"
 if [ -f data/x1.2562.grid.nc ]; then
     echo "  (mesh exists — skipping download)"
 else
@@ -117,25 +117,30 @@ else
 fi
 
 # ---------- Step 5: Run JW tests ---------------------------------------------
-step "Step 5/8: Run JW baroclinic wave test — chapman (${NPROCS} MPI ranks)"
+step "Step 5/9: Run JW baroclinic wave test — chapman (${NPROCS} MPI ranks)"
 rm -rf data/jw_480km_chapman
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
     bash scripts/run_jw_test.sh "${NPROCS}" chapman
 
-step "Step 6/8: Run JW baroclinic wave test — analytical (${NPROCS} MPI ranks)"
+step "Step 6/9: Run JW baroclinic wave test — analytical (${NPROCS} MPI ranks)"
 rm -rf data/jw_480km_analytical
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
     bash scripts/run_jw_test.sh "${NPROCS}" analytical
 
-step "Step 7/8: Run JW baroclinic wave test — chapman_emis_dep (${NPROCS} MPI ranks)"
+step "Step 7/9: Run JW baroclinic wave test — chapman_emis_dep (${NPROCS} MPI ranks)"
 rm -rf data/jw_480km_chapman_emis_dep
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
     bash scripts/run_jw_test.sh "${NPROCS}" chapman_emis_dep
 
-step "Step 8/8: Run JW baroclinic wave test — ts1 (${NPROCS} MPI ranks)"
+step "Step 8/9: Run JW baroclinic wave test — ts1 (${NPROCS} MPI ranks)"
 rm -rf data/jw_480km_ts1
 ${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
     bash scripts/run_jw_test.sh "${NPROCS}" ts1
+
+step "Step 9/9: Run JW baroclinic wave test — ts1_cloud (${NPROCS} MPI ranks)"
+rm -rf data/jw_480km_ts1_cloud
+${CONTAINER_RT} run --rm -v "${MPAS_DIR}:/mpas:Z" -w /mpas "${IMAGE}" \
+    bash scripts/run_jw_test.sh "${NPROCS}" ts1_cloud
 
 # Backward-compatible symlink for phases 0-2 (which expect data/jw_480km/)
 rm -rf data/jw_480km
@@ -145,6 +150,7 @@ ln -sfn jw_480km_chapman data/jw_480km
 step "Done"
 echo "  Output:"
 ls -lh data/jw_480km_chapman/output.nc data/jw_480km_analytical/output.nc \
-       data/jw_480km_chapman_emis_dep/output.nc data/jw_480km_ts1/output.nc
+       data/jw_480km_chapman_emis_dep/output.nc data/jw_480km_ts1/output.nc \
+       data/jw_480km_ts1_cloud/output.nc
 echo ""
 echo "  To view results:  jupyter notebook verification/"

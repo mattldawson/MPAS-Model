@@ -12,7 +12,7 @@ module mpas_chemistry_species
    use mpas_pool_routines, only : mpas_pool_get_dimension
    use mpas_log,           only : mpas_log_write
    use iso_fortran_env,    only : real64
-   use mpas_chemistry_utils, only : MW_AIR
+   use mpas_chemistry_utils, only : MW_AIR, to_mpas_name
 
    implicit none
 
@@ -70,12 +70,13 @@ contains
    !!   - Molar mass from "molecular weight [kg mol-1]" property
    !!   - MPAS index from pool dimension "index_<lowercase_name>"
    !!   - If it has "__is_tuvx_profile" → build TUV-x profile descriptor
-   subroutine chem_species_init(state_pool, micm_solver, micm_state, errmsg, errcode)
+   subroutine chem_species_init(config_dir, state_pool, micm_solver, micm_state, errmsg, errcode)
 
       use musica_micm,  only : micm_t
       use musica_state, only : state_t
       use musica_util,  only : error_t, mappings_t, string_t
 
+      character(len=*),              intent(in)  :: config_dir
       type(mpas_pool_type), pointer, intent(in) :: state_pool
       type(micm_t),         pointer, intent(in) :: micm_solver
       type(state_t),        pointer, intent(in) :: micm_state
@@ -88,7 +89,7 @@ contains
       integer, pointer :: idx_ptr
       character(len=128) :: species_name, mpas_name
       real (kind=real64) :: vmr_val, mw_val, sh_val
-      logical :: is_advected
+      logical :: is_advected, got_micm_mw
 
       ! Temporary arrays (allocatable, sized to n_species)
       integer, allocatable :: tmp_adv_mpas(:), tmp_adv_micm(:)
@@ -97,6 +98,13 @@ contains
       real (kind=real64), allocatable :: tmp_con_vmr(:)
       type(tuvx_profile_info), allocatable :: tmp_tuvx(:)
       integer :: n_adv, n_con, n_tvx
+
+      ! Advected species file: name→MW map for condensed species overrides
+      integer, parameter :: MAX_FILE_SPECIES = 300
+      character(len=128) :: file_species_names(MAX_FILE_SPECIES)
+      real (kind=real64)  :: file_species_mw(MAX_FILE_SPECIES)
+      integer :: n_file_species
+      real (kind=real64) :: file_mw
 
       errmsg  = ''
       errcode = 0
@@ -109,6 +117,11 @@ contains
       allocate(tmp_adv_mw(n_species))
       allocate(tmp_con_micm(n_species), tmp_con_vmr(n_species))
       allocate(tmp_tuvx(n_species))
+
+      ! Read advected_species.txt for optional MW overrides (condensed species)
+      call read_advected_species_file(config_dir, file_species_names, &
+                                       file_species_mw, n_file_species, &
+                                       MAX_FILE_SPECIES)
 
       n_adv = 0
       n_con = 0
@@ -162,27 +175,40 @@ contains
             cycle
          end if
 
-         ! Query molar mass — if absent, skip (third body or similar)
+         ! Query molar mass — try MICM first, fall back to advected file
          mw_val = micm_solver%get_species_property_double( &
             trim(species_name), 'molecular weight [kg mol-1]', error)
-         if (.not. error%is_success()) then
-            call mpas_log_write('[CheMPAS]   Skipping ' // trim(species_name) &
-                                // ' (no molar mass)')
-            cycle
+         got_micm_mw = error%is_success()
+
+         if (.not. got_micm_mw) then
+            ! Condensed-phase species have no queryable properties.
+            ! Check if advected_species.txt provides an explicit MW.
+            file_mw = lookup_file_mw(trim(species_name), file_species_names, &
+                                      file_species_mw, n_file_species)
+            if (file_mw > 0.0_real64) then
+               mw_val = file_mw
+               call mpas_log_write('[CheMPAS]   Condensed advected: ' &
+                                   // trim(species_name) // ' (MW from file)')
+            else
+               call mpas_log_write('[CheMPAS]   Skipping ' // trim(species_name) &
+                                   // ' (no molar mass)')
+               cycle
+            end if
          end if
 
-         ! Check if explicitly marked as advected via __is_advected property.
-         ! Species with MW but without __is_advected are MICM-internal
-         ! (short-lived radicals, third body, etc.) and do not get MPAS scalars.
-         is_advected = micm_solver%get_species_property_bool( &
-            trim(species_name), '__is_advected', error)
-         if (.not. error%is_success() .or. .not. is_advected) then
-            call mpas_log_write('[CheMPAS]   MICM-internal: ' // trim(species_name))
-            cycle
+         ! For gas-phase species (MICM MW found), check __is_advected property.
+         ! Condensed species with file MW are implicitly advected.
+         if (got_micm_mw) then
+            is_advected = micm_solver%get_species_property_bool( &
+               trim(species_name), '__is_advected', error)
+            if (.not. error%is_success() .or. .not. is_advected) then
+               call mpas_log_write('[CheMPAS]   MICM-internal: ' // trim(species_name))
+               cycle
+            end if
          end if
 
          ! Advected species — look up MPAS scalar index
-         mpas_name = to_lower(trim(species_name))
+         mpas_name = to_mpas_name(trim(species_name))
          nullify(idx_ptr)
          call mpas_pool_get_dimension(state_pool, 'index_' // trim(mpas_name), idx_ptr)
          if (.not. associated(idx_ptr)) then
@@ -287,18 +313,68 @@ contains
    end subroutine chem_species_cleanup
 
 
-   !> Convert a string to lowercase.
-   pure function to_lower(str) result(lower_str)
-      character(len=*), intent(in) :: str
-      character(len=len(str))      :: lower_str
-      integer :: i, ic
-      lower_str = str
-      do i = 1, len(str)
-         ic = ichar(str(i:i))
-         if (ic >= ichar('A') .and. ic <= ichar('Z')) then
-            lower_str(i:i) = char(ic + 32)
+   !> Read advected_species.txt — extract species names and optional MW values.
+   !! Lines with one field: name only (MW=0 → use MICM query).
+   !! Lines with two fields: name + MW (for condensed species).
+   subroutine read_advected_species_file(config_dir, names, mw_vals, n, max_n)
+      character(len=*), intent(in)  :: config_dir
+      character(len=128), intent(out) :: names(:)
+      real (kind=real64), intent(out) :: mw_vals(:)
+      integer, intent(out) :: n
+      integer, intent(in)  :: max_n
+
+      character(len=512) :: fpath, line
+      character(len=128) :: word1
+      real (kind=real64) :: word2
+      integer :: iunit, ios
+      logical :: file_exists
+
+      n = 0
+      fpath = trim(config_dir) // '/advected_species.txt'
+      inquire(file=trim(fpath), exist=file_exists)
+      if (.not. file_exists) return
+
+      open(newunit=iunit, file=trim(fpath), status='old', action='read', iostat=ios)
+      if (ios /= 0) return
+
+      do
+         read(iunit, '(A)', iostat=ios) line
+         if (ios /= 0) exit
+         line = adjustl(line)
+         if (len_trim(line) == 0) cycle
+         if (line(1:1) == '#') cycle
+         if (n >= max_n) exit
+
+         ! Try to read name + MW
+         read(line, *, iostat=ios) word1, word2
+         n = n + 1
+         names(n) = word1
+         if (ios == 0) then
+            mw_vals(n) = word2
+         else
+            mw_vals(n) = 0.0_real64
          end if
       end do
-   end function to_lower
+      close(iunit)
+   end subroutine read_advected_species_file
+
+
+   !> Look up a species name in the file MW table.
+   !! Returns the MW if found and >0, otherwise returns 0.
+   real (kind=real64) function lookup_file_mw(name, file_names, file_mw, n_file)
+      character(len=*), intent(in) :: name
+      character(len=128), intent(in) :: file_names(:)
+      real (kind=real64), intent(in) :: file_mw(:)
+      integer, intent(in) :: n_file
+      integer :: j
+
+      lookup_file_mw = 0.0_real64
+      do j = 1, n_file
+         if (trim(file_names(j)) == trim(name)) then
+            lookup_file_mw = file_mw(j)
+            return
+         end if
+      end do
+   end function lookup_file_mw
 
 end module mpas_chemistry_species

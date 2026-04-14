@@ -12,6 +12,7 @@ module mpas_chemistry_utils
 
    private
    public :: compute_solar_zenith_angle, compute_earth_sun_distance
+   public :: to_mpas_name
 
    ! Universal physical constants (species-independent)
    real (kind=real64), parameter, public :: AVOGADRO = 6.02214076e23_real64
@@ -90,5 +91,25 @@ contains
       dist_au = 1.0_RKIND / sqrt(dist_au)
 
    end function compute_earth_sun_distance
+
+
+   !> Convert a MICM species name to an MPAS-safe dimension name.
+   !! Lowercases and replaces dots with underscores.
+   !! e.g. "CLOUD.AQUEOUS.SO4mm" → "cloud_aqueous_so4mm"
+   pure function to_mpas_name(micm_name) result(mpas_name)
+      character(len=*), intent(in) :: micm_name
+      character(len=len(micm_name)) :: mpas_name
+      integer :: i, ic
+
+      mpas_name = micm_name
+      do i = 1, len(micm_name)
+         ic = ichar(micm_name(i:i))
+         if (ic >= ichar('A') .and. ic <= ichar('Z')) then
+            mpas_name(i:i) = char(ic + 32)
+         else if (micm_name(i:i) == '.') then
+            mpas_name(i:i) = '_'
+         end if
+      end do
+   end function to_mpas_name
 
 end module mpas_chemistry_utils

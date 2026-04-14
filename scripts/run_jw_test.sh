@@ -81,8 +81,12 @@ done
 cp -r "${MPAS_DIR}/chemistry_data" chemistry_data
 
 # Generate advected_species.txt from the mechanism's JSON config
-# (needed at framework init time before MICM is available)
-python3 "${MPAS_DIR}/scripts/generate_advected_species.py" "chemistry_data/${MECHANISM}"
+# (needed at framework init time before MICM is available).
+# Skip if the mechanism already includes a hand-curated file (e.g., ts1_cloud
+# which has MW annotations for condensed-phase species).
+if [ ! -f "chemistry_data/${MECHANISM}/advected_species.txt" ]; then
+    python3 "${MPAS_DIR}/scripts/generate_advected_species.py" "chemistry_data/${MECHANISM}"
+fi
 
 # TUV-x data files: the NetCDF cross-section and quantum-yield files are large
 # and not bundled in the MPAS-Model repo.  They are installed by the MUSICA

@@ -53,6 +53,15 @@ def get_advected_species(species_list):
     return advected
 
 
+def to_mpas_name(name):
+    """Convert a MICM species name to an MPAS-safe variable name.
+
+    Lowercases the name and replaces dots with underscores, matching
+    the Fortran to_mpas_name function in mpas_chemistry_utils.F90.
+    """
+    return name.lower().replace(".", "_")
+
+
 def generate_registry_snippet(mechanism_name, advected_species):
     """Generate Registry.xml snippet text."""
     pkg_name = f"chem_{mechanism_name}_in"
@@ -64,7 +73,7 @@ def generate_registry_snippet(mechanism_name, advected_species):
         '<!-- Add these inside the scalars var_array in Registry.xml -->',
     ]
     for sp_name in advected_species:
-        var_name = sp_name.lower()
+        var_name = to_mpas_name(sp_name)
         lines.append(
             f'<var name="{var_name}" '
             f'array_group="chem_{mechanism_name}" '

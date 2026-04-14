@@ -19,6 +19,7 @@ module mpas_chemistry_allocate
                                   mpas_pool_get_error_level, mpas_pool_set_error_level
    use mpas_attlist,       only : mpas_add_att
    use mpas_log,           only : mpas_log_write
+   use mpas_chemistry_utils, only : to_mpas_name
 
    implicit none
 
@@ -100,6 +101,7 @@ contains
 
 
    !> Read species names from a text file (one name per line).
+   !! Lines may have an optional second field (e.g. molar mass) which is ignored here.
    subroutine read_species_file(filepath, names, n, errmsg, errcode)
 
       character(len=*), intent(in) :: filepath
@@ -108,7 +110,7 @@ contains
       character(len=*), intent(out) :: errmsg
       integer, intent(out) :: errcode
 
-      integer :: iunit, ios
+      integer :: iunit, ios, sp_pos
       character(len=MAX_NAME_LEN) :: line
 
       errmsg  = ''
@@ -135,7 +137,13 @@ contains
             close(iunit)
             return
          end if
-         names(n) = trim(line)
+         ! Extract first token only (ignore optional MW field)
+         sp_pos = index(trim(line), ' ')
+         if (sp_pos > 0) then
+            names(n) = line(1:sp_pos-1)
+         else
+            names(n) = trim(line)
+         end if
       end do
 
       close(iunit)
@@ -195,7 +203,7 @@ contains
 
       ! Add index dimensions for each new species
       do i = 1, n_species
-         dim_key = 'index_' // trim(species_names(i))
+         dim_key = 'index_' // trim(to_mpas_name(trim(species_names(i))))
          idx = old_num + i
          call mpas_pool_add_dimension(sub_pool, trim(dim_key), idx)
       end do
