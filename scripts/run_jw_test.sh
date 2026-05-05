@@ -14,6 +14,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NPROCS="${1:-$(nproc)}"
 MECHANISM="${2:-chapman}"
+JW_RUN_DURATION="${JW_RUN_DURATION:-1_00:00:00}"
+JW_OUTPUT_INTERVAL="${JW_OUTPUT_INTERVAL:-01:00:00}"
 
 # Chemistry config path: convention-based (single directory)
 CHEM_CONFIG="chemistry_data/${MECHANISM}"
@@ -66,6 +68,7 @@ mkdir -p "${WORK_DIR}"
 cd "${WORK_DIR}"
 
 echo "=== Setting up JW baroclinic wave test (480-km, ${NPROCS} MPI ranks, ${MECHANISM}) ==="
+echo "=== Runtime controls: run_duration=${JW_RUN_DURATION}, output_interval=${JW_OUTPUT_INTERVAL} ==="
 
 # Link executables and mesh
 ln -sf "${MPAS_DIR}/init_atmosphere_model" .
@@ -216,7 +219,7 @@ cat > namelist.atmosphere << EOF
 &nhyd_model
     config_dt = 1800.0
     config_start_time = '0000-01-01_00:00:00'
-    config_run_duration = '1_00:00:00'
+    config_run_duration = '${JW_RUN_DURATION}'
     config_split_dynamics_transport = false
     config_number_of_sub_steps = 6
     config_dynamics_split_steps = 1
@@ -307,7 +310,7 @@ cat > streams.atmosphere << 'EOF'
         type="output"
         filename_template="output.nc"
         filename_interval="none"
-        output_interval="01:00:00">
+    output_interval="__JW_OUTPUT_INTERVAL__">
 
     <var name="latCell"/>
     <var name="lonCell"/>
@@ -346,13 +349,15 @@ cat > streams.atmosphere << 'EOF'
 </streams>
 EOF
 
+sed -i "s/__JW_OUTPUT_INTERVAL__/${JW_OUTPUT_INTERVAL}/" streams.atmosphere
+
 # ---- Create empty stream_list file ----
 touch stream_list.atmosphere.output
 touch stream_list.atmosphere.diagnostics
 touch stream_list.atmosphere.diag_ugwp
 
 # ---- Run atmosphere_model ----
-echo "=== Running JW baroclinic wave (1 day, 480-km mesh, ${MECHANISM} chemistry) ==="
+echo "=== Running JW baroclinic wave (${JW_RUN_DURATION}, 480-km mesh, ${MECHANISM} chemistry) ==="
 mpirun ${MPIRUN_OPTS} ./atmosphere_model
 echo ""
 

@@ -15,13 +15,15 @@ import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-MPAS_DIR = os.path.dirname(SCRIPT_DIR)
+# This file lives in MPAS-Model/chemistry_data/ts1/, so MPAS root is two
+# levels up.
+MPAS_DIR = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 MUSICA_DIR = os.path.dirname(MPAS_DIR)
 
 TS1_JSON = os.path.join(MUSICA_DIR, "configs", "v1", "ts1", "ts1.json")
 TS1_IC = os.path.join(MUSICA_DIR, "configs", "v1", "ts1", "initial_conditions.csv")
 TUVX_JSON = os.path.join(MUSICA_DIR, "configs", "tuvx", "ts1_tsmlt.json")
-OUT_DIR = os.path.join(MPAS_DIR, "chemistry_data", "ts1")
+OUT_DIR = SCRIPT_DIR
 
 # ──────────── Species classification ────────────
 

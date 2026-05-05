@@ -39,6 +39,17 @@ module mpas_chemistry_cloud
    !> Default concentration values [mol/m3]
    real (kind=real64), allocatable, save :: default_conc(:)
 
+   !> Number of ALL aqueous species (for concentration floor)
+   integer, save :: n_aqueous = 0
+
+   !> MICM species indices for all aqueous species
+   integer, allocatable, save :: aqueous_micm_idx(:)
+
+   !> Aqueous-species name prefix, derived at init time from the
+   !! cloud-water species name in mpas_cloud_water.txt (everything up to and
+   !! including the final '.'). Empty string disables prefix-based discovery.
+   character(len=128), save :: aqueous_prefix = ''
+
 contains
 
    !> Initialize cloud chemistry from support files.
@@ -101,6 +112,25 @@ contains
       call mpas_log_write('[CheMPAS-Cloud] Cloud water species: ' &
                           // trim(species_name) // ' → MICM index $i', &
                           intArgs=(/idx/))
+
+      ! Derive the aqueous-species name prefix from the cloud-water species
+      ! name: take everything up to and including the final '.' (e.g. for
+      ! "CLOUD.AQUEOUS.H2O" the prefix is "CLOUD.AQUEOUS."). All other
+      ! aqueous species in the mechanism share this prefix by convention; it
+      ! is the discovery key for the concentration floor. No mechanism-
+      ! specific string lives in the source code — only in the config file.
+      block
+         integer :: dot_pos
+         dot_pos = index(trim(species_name), '.', back=.true.)
+         if (dot_pos > 0) then
+            aqueous_prefix = species_name(1:dot_pos)
+            call mpas_log_write('[CheMPAS-Cloud] Aqueous species prefix: ' // trim(aqueous_prefix))
+         else
+            aqueous_prefix = ''
+            call mpas_log_write('[CheMPAS-Cloud] Cloud water species name has no "."; ' &
+                                // 'aqueous-species discovery disabled')
+         end if
+      end block
 
       ! --- Read prescribed cloud profile ---
       fpath = trim(config_dir) // '/prescribed_cloud.txt'
@@ -180,7 +210,55 @@ contains
       call mpas_log_write('[CheMPAS-Cloud] Initialized: $i default conc species', &
                           intArgs=(/n_default/))
 
+      ! --- Discover ALL aqueous species (sharing aqueous_prefix) for floor ---
+      call discover_aqueous_species(micm_state)
+
    end subroutine cloud_init
+
+
+   !> Find all species whose names start with the aqueous-species prefix
+   !! (derived from mpas_cloud_water.txt) and store their MICM indices for
+   !! the concentration floor.
+   subroutine discover_aqueous_species(micm_state)
+
+      use musica_state, only : state_t
+
+      type(state_t), pointer, intent(in) :: micm_state
+
+      integer, parameter :: MAX_AQ = 200
+      integer :: tmp_aq(MAX_AQ)
+      integer :: ns, i, aq_count, plen
+      character(len=256) :: sname
+
+      plen = len_trim(aqueous_prefix)
+      if (plen == 0) then
+         n_aqueous = 0
+         call mpas_log_write('[CheMPAS-Cloud] No aqueous prefix configured; floor disabled')
+         return
+      end if
+
+      ns = micm_state%species_ordering%size()
+      aq_count = 0
+      do i = 1, ns
+         sname = micm_state%species_ordering%name(i)
+         if (len_trim(sname) >= plen) then
+            if (sname(1:plen) == aqueous_prefix(1:plen)) then
+               if (aq_count < MAX_AQ) then
+                  aq_count = aq_count + 1
+                  tmp_aq(aq_count) = micm_state%species_ordering%index(i)
+               end if
+            end if
+         end if
+      end do
+      n_aqueous = aq_count
+      if (aq_count > 0) then
+         allocate(aqueous_micm_idx(aq_count))
+         aqueous_micm_idx(1:aq_count) = tmp_aq(1:aq_count)
+      end if
+      call mpas_log_write('[CheMPAS-Cloud] Found $i aqueous species for floor', &
+                          intArgs=(/n_aqueous/))
+
+   end subroutine discover_aqueous_species
 
 
    !> Set cloud water and default concentrations in MICM state.
@@ -201,13 +279,21 @@ contains
 
       integer :: iCell, k, i_cell, flat_idx, s
       real (kind=real64) :: rho_d, cloud_conc
+      logical, save :: diag_printed = .false.
+      integer :: n_cloud_cells
+      real (kind=real64) :: max_cloud_conc
+      logical :: in_cloud
 
       if (cloud_water_micm_idx < 1 .and. n_default == 0) return
+
+      n_cloud_cells = 0
+      max_cloud_conc = 0.0_real64
 
       i_cell = 0
       do iCell = 1, nCellsSolve
          do k = 1, nVertLevels
             i_cell = i_cell + 1
+            in_cloud = .false.
 
             ! Set cloud water concentration
             if (cloud_water_micm_idx >= 1) then
@@ -220,6 +306,9 @@ contains
                       real(pressure(k, iCell), real64) <= prescribed_p_bot) then
                      ! LWC [kg/kg] * rho [kg/m3] / MW [kg/mol] → mol/m3
                      cloud_conc = prescribed_lwc * rho_d / cloud_water_mw
+                     n_cloud_cells = n_cloud_cells + 1
+                     if (cloud_conc > max_cloud_conc) max_cloud_conc = cloud_conc
+                     in_cloud = .true.
                   else
                      cloud_conc = 0.0_real64
                   end if
@@ -227,17 +316,49 @@ contains
                   ! No prescribed cloud — would need MPAS qc (future work)
                   cloud_conc = 0.0_real64
                end if
-               concentrations(flat_idx) = cloud_conc
+               ! Floor to tiny value to prevent division-by-zero in
+               ! dissolved reactions (rate / solvent^n)
+               concentrations(flat_idx) = max(cloud_conc, 1.0e-30_real64)
             end if
 
-            ! Set default concentrations for equilibrium species
-            do s = 1, n_default
+            ! Set default concentrations ONLY in cloud cells.
+            ! In non-cloud cells (H2O≈1e-30), defaults like Hp=1e-4
+            ! are wildly inconsistent with dissolved equilibria and
+            ! prevent constraint initialization from converging.
+            if (in_cloud) then
+               do s = 1, n_default
+                  flat_idx = (i_cell - 1) * sp_gc_stride &
+                           + (default_micm_idx(s) - 1) * sp_var_stride + 1
+                  concentrations(flat_idx) = default_conc(s)
+               end do
+            end if
+
+            ! Floor ALL aqueous species to avoid division-by-zero
+            ! in dissolved reactions and equilibrium constraints
+            do s = 1, n_aqueous
                flat_idx = (i_cell - 1) * sp_gc_stride &
-                        + (default_micm_idx(s) - 1) * sp_var_stride + 1
-               concentrations(flat_idx) = default_conc(s)
+                        + (aqueous_micm_idx(s) - 1) * sp_var_stride + 1
+               concentrations(flat_idx) = max(concentrations(flat_idx), 1.0e-30_real64)
             end do
          end do
       end do
+
+      if (.not. diag_printed) then
+         diag_printed = .true.
+         call mpas_log_write('[CheMPAS-Cloud] DIAG: cloud_water_micm_idx=$i, n_default=$i', &
+                             intArgs=(/cloud_water_micm_idx, n_default/))
+         call mpas_log_write('[CheMPAS-Cloud] DIAG: use_prescribed_cloud=$l, LWC=$r', &
+                             logicArgs=(/use_prescribed_cloud/), &
+                             realArgs=(/real(prescribed_lwc, RKIND)/))
+         call mpas_log_write('[CheMPAS-Cloud] DIAG: p_top=$r Pa, p_bot=$r Pa', &
+                             realArgs=(/real(prescribed_p_top, RKIND), &
+                                        real(prescribed_p_bot, RKIND)/))
+         call mpas_log_write('[CheMPAS-Cloud] DIAG: n_cloud_cells=$i / $i total, max_cloud_conc=$r mol/m3', &
+                             intArgs=(/n_cloud_cells, nCellsSolve * nVertLevels/), &
+                             realArgs=(/real(max_cloud_conc, RKIND)/))
+         call mpas_log_write('[CheMPAS-Cloud] DIAG: sp_gc_stride=$i, sp_var_stride=$i', &
+                             intArgs=(/sp_gc_stride, sp_var_stride/))
+      end if
 
    end subroutine cloud_set_state
 
@@ -246,8 +367,10 @@ contains
    subroutine cloud_cleanup()
       if (allocated(default_micm_idx)) deallocate(default_micm_idx)
       if (allocated(default_conc))     deallocate(default_conc)
+      if (allocated(aqueous_micm_idx)) deallocate(aqueous_micm_idx)
       cloud_water_micm_idx = -1
       n_default = 0
+      n_aqueous = 0
       use_prescribed_cloud = .false.
    end subroutine cloud_cleanup
 

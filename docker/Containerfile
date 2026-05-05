@@ -92,9 +92,11 @@ ENV NETCDF=/usr/local
 ENV PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
 
 # ---- MUSICA ----
-ARG MUSICA_GIT_TAG=main
+# CheMPAS development tracks the latest MUSICA development branch.
+ARG MUSICA_GIT_REPOSITORY=https://github.com/mattldawson/musica.git
+ARG MUSICA_GIT_TAG=develop-something-ambitious
 RUN cd /tmp \
-    && git clone --depth 1 --branch ${MUSICA_GIT_TAG} https://github.com/NCAR/musica.git \
+    && git clone --depth 1 --branch ${MUSICA_GIT_TAG} ${MUSICA_GIT_REPOSITORY} musica \
     && cd musica \
     && cmake -S . -B build \
              -DCMAKE_BUILD_TYPE=Release \

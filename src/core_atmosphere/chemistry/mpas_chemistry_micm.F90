@@ -9,9 +9,11 @@
 module mpas_chemistry_micm
 
    use mpas_kind_types,  only : RKIND
+   use mpas_log,         only : mpas_log_write
    use iso_fortran_env,  only : real64
    use musica_micm,      only : micm_t, RosenbrockStandardOrder, &
-                                RosenbrockDAE4StandardOrder, solver_stats_t
+                                RosenbrockDAE4StandardOrder, solver_stats_t, &
+                                rosenbrock_solver_parameters_t
    use musica_state,     only : state_t, conditions_t
    use musica_util,      only : error_t, mappings_t, string_t
 
@@ -92,6 +94,23 @@ contains
       ! Expose solver pointer for species discovery
       micm_solver_ptr => micm_solver
 
+      ! For DAE solvers, increase constraint initialization iterations
+      ! (default 10 is too few when starting far from equilibrium)
+      if (using_dae_solver) then
+         block
+            type(rosenbrock_solver_parameters_t) :: params
+            params = micm_solver%get_rosenbrock_solver_parameters(error)
+            if (error%is_success()) then
+               params%constraint_init_max_iterations = 100
+               params%constraint_init_tolerance = 1.0e-8_real64
+               call micm_solver%set_rosenbrock_solver_parameters(params, error)
+               if (error%is_success()) then
+                  call mpas_log_write('[CheMPAS] DAE constraint init: max_iter=100, tol=1e-8')
+               end if
+            end if
+         end block
+      end if
+
       ! Query maximum grid cells
       max_grid_cells = micm_solver%get_maximum_number_of_grid_cells()
 
@@ -134,6 +153,44 @@ contains
          errmsg = '[CheMPAS] MICM solve failed: ' // error%message()
          errcode = 1; return
       end if
+
+      ! DIAGNOSTIC: report solver state on first call
+      block
+         logical, save :: first = .true.
+         if (first) then
+            first = .false.
+            call mpas_log_write('[DIAG] solver_state = ' // trim(solver_state%value_))
+            call mpas_log_write('[DIAG] stats: accepted=$i, rejected=$i, decompositions=$i', &
+                                intArgs=(/int(stats%accepted()), int(stats%rejected()), &
+                                          int(stats%decompositions())/))
+            call mpas_log_write('[DIAG] stats: solves=$i, final_time=$r', &
+                                intArgs=(/int(stats%solves())/), &
+                                realArgs=(/real(stats%final_time(), RKIND)/))
+         end if
+      end block
+
+      ! Log solver statistics in a machine-parseable format for performance analysis.
+      ! [CHEM_STATS] lines are parsed by the verification notebooks.
+      ! Each call covers nCellsSolve * nVertLevels grid cells solved together.
+      block
+         integer, save :: call_count = 0
+         call_count = call_count + 1
+
+         ! Full stats on first call so notebook can see solver-state string
+         if (call_count == 1) then
+            call mpas_log_write('[DIAG] micm_solve first call: solver_state=' // &
+                                trim(solver_state%value_))
+         end if
+
+         ! Parseable stats on every call:
+         ! [CHEM_STATS] call=N accepted=A rejected=R nsteps=S decomp=D solves=V final_t=F
+         call mpas_log_write( &
+            '[CHEM_STATS] call=$i accepted=$i rejected=$i nsteps=$i decomp=$i solves=$i final_t=$r', &
+            intArgs=(/call_count, int(stats%accepted()), int(stats%rejected()), &
+                      int(stats%number_of_steps()), int(stats%decompositions()), &
+                      int(stats%solves())/), &
+            realArgs=(/real(stats%final_time(), RKIND)/))
+      end block
 
    end subroutine micm_solve
 

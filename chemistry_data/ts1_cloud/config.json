@@ -375,7 +375,6 @@
       "__description": "sulfur dioxide",
       "__absolute tolerance": 1e-12,
       "__is_advected": true,
-      "__mpas_surface_emission_flux [molec cm-2 s-1]": 50000000000.0,
       "__mpas_surface_deposition_velocity [cm s-1]": 0.8
     },
     {
@@ -1404,6 +1403,35 @@
       "__absolute tolerance": 1e-12,
       "__is_advected": true,
       "__description": "sulfate ion (cloud aqueous)"
+    },
+    {
+      "name": "SO2OOHm",
+      "molecular weight [kg mol-1]": 0.11307,
+      "__absolute tolerance": 1e-12
+    },
+    {
+      "name": "SO2_produced",
+      "__description": "collector for all gas-phase SO2 production reactions"
+    },
+    {
+      "name": "SO2_lost",
+      "__description": "collector for all gas-phase SO2 loss reactions"
+    },
+    {
+      "name": "H2O2_produced",
+      "__description": "collector for all gas-phase H2O2 production reactions"
+    },
+    {
+      "name": "H2O2_lost",
+      "__description": "collector for all gas-phase H2O2 loss reactions"
+    },
+    {
+      "name": "O3_produced",
+      "__description": "collector for all gas-phase O3 production reactions"
+    },
+    {
+      "name": "O3_lost",
+      "__description": "collector for all gas-phase O3 loss reactions"
     }
   ],
   "phases": [
@@ -2055,6 +2083,24 @@
         },
         {
           "name": "M"
+        },
+        {
+          "name": "SO2_produced"
+        },
+        {
+          "name": "SO2_lost"
+        },
+        {
+          "name": "H2O2_produced"
+        },
+        {
+          "name": "H2O2_lost"
+        },
+        {
+          "name": "O3_produced"
+        },
+        {
+          "name": "O3_lost"
         }
       ]
     },
@@ -2069,6 +2115,7 @@
         "HSO3m",
         "SO3mm",
         "SO4mm",
+        "SO2OOHm",
         {
           "name": "H2O",
           "density [kg m-3]": 997.0
@@ -2680,6 +2727,10 @@
         {
           "species name": "BR",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -3243,6 +3294,10 @@
         {
           "species name": "HO2",
           "coefficient": 0.14
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -3457,6 +3512,10 @@
         },
         {
           "species name": "CL",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 1.0
         }
       ],
@@ -3773,6 +3832,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -3920,6 +3983,10 @@
       "products": [
         {
           "species name": "SO2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 1.0
         }
       ],
@@ -4149,6 +4216,10 @@
         {
           "species name": "O2",
           "coefficient": 2.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -4319,6 +4390,10 @@
         {
           "species name": "HNO3",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -4421,6 +4496,10 @@
         },
         {
           "species name": "M",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_produced",
           "coefficient": 1.0
         }
       ],
@@ -4823,6 +4902,10 @@
         {
           "species name": "O",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -4901,6 +4984,10 @@
       "products": [
         {
           "species name": "C6H5O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -5008,6 +5095,10 @@
         },
         {
           "species name": "NO",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 1.0
         }
       ],
@@ -5170,6 +5261,10 @@
         {
           "species name": "CH3CO3",
           "coefficient": 0.45
+        },
+        {
+          "species name": "O3_produced",
+          "coefficient": 0.15
         }
       ],
       "gas phase": "gas"
@@ -5697,6 +5792,10 @@
         },
         {
           "species name": "CH2O",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -6321,6 +6420,10 @@
         {
           "species name": "O2",
           "coefficient": 2.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -7258,6 +7361,10 @@
         {
           "species name": "HO2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -7759,6 +7866,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -7874,6 +7985,10 @@
       "products": [
         {
           "species name": "O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -8493,6 +8608,10 @@
         {
           "species name": "CLO",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -8949,6 +9068,10 @@
         },
         {
           "species name": "H",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 1.0
         }
       ],
@@ -9731,6 +9854,14 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -9880,6 +10011,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -9984,6 +10119,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10012,6 +10151,10 @@
         },
         {
           "species name": "O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -10103,6 +10246,10 @@
         {
           "species name": "OH",
           "coefficient": 0.36
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10412,6 +10559,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10445,6 +10596,10 @@
         {
           "species name": "M",
           "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10477,6 +10632,10 @@
         },
         {
           "species name": "H2O",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_produced",
           "coefficient": 1.0
         }
       ],
@@ -10518,6 +10677,10 @@
         },
         {
           "species name": "H2O",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_produced",
           "coefficient": 1.0
         }
       ],
@@ -10642,6 +10805,10 @@
         {
           "species name": "RO2",
           "coefficient": 0.06
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10704,6 +10871,10 @@
         {
           "species name": "O",
           "coefficient": 2.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -10922,6 +11093,10 @@
         {
           "species name": "CH3O2",
           "coefficient": 0.45
+        },
+        {
+          "species name": "O3_produced",
+          "coefficient": 0.15
         }
       ],
       "gas phase": "gas"
@@ -11446,6 +11621,10 @@
         {
           "species name": "RO2",
           "coefficient": 0.06
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -11474,6 +11653,10 @@
         },
         {
           "species name": "HO2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_lost",
           "coefficient": 1.0
         }
       ],
@@ -11536,6 +11719,10 @@
         },
         {
           "species name": "H",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 1.0
         }
       ],
@@ -11615,6 +11802,10 @@
         },
         {
           "species name": "O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -12464,6 +12655,10 @@
         {
           "species name": "CH3O2",
           "coefficient": 0.05
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -13028,6 +13223,10 @@
         {
           "species name": "HCOOH",
           "coefficient": 0.12
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -13226,6 +13425,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -13337,6 +13540,10 @@
         },
         {
           "species name": "HO2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_lost",
           "coefficient": 1.0
         }
       ],
@@ -14100,6 +14307,10 @@
         {
           "species name": "HO2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -14694,6 +14905,10 @@
       "products": [
         {
           "species name": "H2O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "H2O2_produced",
           "coefficient": 1.0
         }
       ],
@@ -15552,6 +15767,10 @@
         {
           "species name": "OH",
           "coefficient": 2.0
+        },
+        {
+          "species name": "H2O2_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -15972,6 +16191,10 @@
         {
           "species name": "O2",
           "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -16147,6 +16370,10 @@
         },
         {
           "species name": "O2",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "O3_lost",
           "coefficient": 1.0
         }
       ],
@@ -16377,6 +16604,10 @@
         {
           "species name": "O",
           "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_produced",
+          "coefficient": 1.0
         }
       ],
       "gas phase": "gas"
@@ -16580,6 +16811,10 @@
         },
         {
           "species name": "O",
+          "coefficient": 1.0
+        },
+        {
+          "species name": "SO2_lost",
           "coefficient": 1.0
         }
       ],
@@ -17129,6 +17364,10 @@
         },
         {
           "species name": "HO2",
+          "coefficient": 0.5
+        },
+        {
+          "species name": "SO2_produced",
           "coefficient": 0.5
         }
       ],
@@ -18429,14 +18668,15 @@
     },
     {
       "type": "EMISSION",
-      "name": "SO2",
+      "name": "SO2_source",
       "gas phase": "gas",
       "products": [
         {
-          "species name": "SO2",
+          "species name": "SO2_produced",
           "coefficient": 1
         }
-      ]
+      ],
+      "__comment": "SO2 emission targets emitted_SO2 (dummy tracking species). SO2(g) is algebraic via S-mass constraint; targeting it directly would be overwritten each solver stage."
     },
     {
       "type": "EMISSION",
@@ -18533,6 +18773,12 @@
       "reactants": [
         {
           "species name": "H2O2",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "H2O2_lost",
           "coefficient": 1
         }
       ]
@@ -18667,6 +18913,12 @@
           "species name": "O3",
           "coefficient": 1
         }
+      ],
+      "products": [
+        {
+          "species name": "O3_lost",
+          "coefficient": 1
+        }
       ]
     },
     {
@@ -18687,6 +18939,12 @@
       "reactants": [
         {
           "species name": "SO2",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "SO2_lost",
           "coefficient": 1
         }
       ]
@@ -18744,8 +19002,9 @@
       }
     },
     {
-      "__comment": "R1: HSO3- + H2O2 -> SO4-- + H2O + H+",
-      "type": "DISSOLVED_REACTION",
+      "__comment": "R1a: HSO3- + H2O2(aq) <-> SO2OOH- + H2O (reversible, Lind & Kok 1986)",
+      "__note": "k_fwd = c_H2O_L * 7.45e7/13 ~= 3.184e8; Keq=1725",
+      "type": "DISSOLVED_REVERSIBLE_REACTION",
       "condensed phase": "AQUEOUS",
       "solvent": "H2O",
       "reactants": [
@@ -18760,11 +19019,69 @@
       ],
       "products": [
         {
-          "species name": "SO4mm",
+          "species name": "SO2OOHm",
           "coefficient": 1
         },
         {
           "species name": "H2O",
+          "coefficient": 1
+        }
+      ],
+      "forward rate constant": {
+        "A": 318400000.0,
+        "C": 4430.0
+      },
+      "equilibrium constant": {
+        "A": 1725.0
+      }
+    },
+    {
+      "__comment": "R1b: SO2OOH- + H+ -> SO4-- (irreversible, rate-capped)",
+      "__note": "k = c_H2O_L * 2.4e6 ~= 1.333e8; min halflife=0.1 from MUSICA Phase-4 sweep — see /memories/repo/ts1-cloud-optimization-log.md",
+      "type": "DISSOLVED_REACTION",
+      "condensed phase": "AQUEOUS",
+      "solvent": "H2O",
+      "reactants": [
+        {
+          "species name": "SO2OOHm",
+          "coefficient": 1
+        },
+        {
+          "species name": "Hp",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "SO4mm",
+          "coefficient": 1
+        }
+      ],
+      "rate constant": {
+        "A": 133300000.0,
+        "C": 4430.0
+      },
+      "min halflife [s]": 0.1
+    },
+    {
+      "__comment": "R2: HSO3- + O3(aq) -> SO4-- + H+ (O3 pathway, rate-capped)",
+      "__note": "k = c_H2O_L * 3.75e5 ~= 2.077e7",
+      "type": "DISSOLVED_REACTION",
+      "condensed phase": "AQUEOUS",
+      "solvent": "H2O",
+      "reactants": [
+        {
+          "species name": "HSO3m",
+          "coefficient": 1
+        },
+        {
+          "species name": "O3",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "SO4mm",
           "coefficient": 1
         },
         {
@@ -18773,9 +19090,38 @@
         }
       ],
       "rate constant": {
-        "A": 4139000000.0,
-        "C": 4430.0
-      }
+        "A": 20770000.0,
+        "C": 5530.0
+      },
+      "min halflife [s]": 1.0
+    },
+    {
+      "__comment": "R3: SO3-- + O3(aq) -> SO4-- (O3 pathway, high rate, rate-capped)",
+      "__note": "k = c_H2O_L * 1.59e9 ~= 8.800e10",
+      "type": "DISSOLVED_REACTION",
+      "condensed phase": "AQUEOUS",
+      "solvent": "H2O",
+      "reactants": [
+        {
+          "species name": "SO3mm",
+          "coefficient": 1
+        },
+        {
+          "species name": "O3",
+          "coefficient": 1
+        }
+      ],
+      "products": [
+        {
+          "species name": "SO4mm",
+          "coefficient": 1
+        }
+      ],
+      "rate constant": {
+        "A": 88000000000.0,
+        "C": 5280.0
+      },
+      "min halflife [s]": 1.0
     },
     {
       "__comment": "Kw: 2 H2O <-> H+ + OH-",
@@ -18859,7 +19205,7 @@
       }
     },
     {
-      "__comment": "Mass conservation: total S in reversible pool",
+      "__comment": "Mass conservation: total S (includes SO4-- and SO2OOH-; emitted_SO2 is source dummy)",
       "type": "LINEAR_CONSTRAINT",
       "name": "sulfur conservation",
       "algebraic phase": "gas",
@@ -18885,6 +19231,26 @@
           "phase": "AQUEOUS",
           "species": "SO3mm",
           "coefficient": 1.0
+        },
+        {
+          "phase": "AQUEOUS",
+          "species": "SO2OOHm",
+          "coefficient": 1.0
+        },
+        {
+          "phase": "AQUEOUS",
+          "species": "SO4mm",
+          "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "SO2_lost",
+          "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "SO2_produced",
+          "coefficient": -1.0
         }
       ]
     },
@@ -18905,6 +19271,16 @@
           "phase": "AQUEOUS",
           "species": "H2O2",
           "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "H2O2_lost",
+          "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "H2O2_produced",
+          "coefficient": -1.0
         }
       ]
     },
@@ -18925,11 +19301,21 @@
           "phase": "AQUEOUS",
           "species": "O3",
           "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "O3_lost",
+          "coefficient": 1.0
+        },
+        {
+          "phase": "gas",
+          "species": "O3_produced",
+          "coefficient": -1.0
         }
       ]
     },
     {
-      "__comment": "Charge balance: H+ = OH- + HSO3- + 2 SO3-- + 2 SO4--",
+      "__comment": "Charge balance: H+ = OH- + HSO3- + 2 SO3-- + 2 SO4-- + SO2OOH-",
       "type": "LINEAR_CONSTRAINT",
       "name": "charge balance",
       "algebraic phase": "AQUEOUS",
@@ -18960,6 +19346,11 @@
           "phase": "AQUEOUS",
           "species": "SO4mm",
           "coefficient": -2.0
+        },
+        {
+          "phase": "AQUEOUS",
+          "species": "SO2OOHm",
+          "coefficient": -1.0
         }
       ]
     }
