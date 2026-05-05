@@ -8,6 +8,7 @@ module mpas_chemistry_state
 
    use mpas_kind_types, only : RKIND
    use iso_fortran_env, only : real64
+   use ieee_arithmetic, only : ieee_is_finite
    use mpas_chemistry_species, only : n_advected, advected_mpas_idx, &
                                        advected_micm_idx, advected_molar_mass, &
                                        n_constant, constant_micm_idx, constant_vmr
@@ -103,11 +104,19 @@ contains
    !!
    !! Only advected species are copied back (constant species are read-only).
    !! mol/m3 * Mw [kg/mol] / rho [kg/m3] → mmr [kg/kg]
+   !!
+   !! Per-cell fault containment: if a cell's solver result contains a
+   !! non-finite (inf/nan) or unphysically large concentration, the MPAS
+   !! scalar is left unchanged at its pre-solve value. This prevents an
+   !! isolated DAE failure from poisoning neighboring cells via MPAS scalar
+   !! advection. The magnitude threshold is keyed off the cell air density
+   !! (mol/m³): no atmospheric species can exceed total air on a per-mol basis.
    subroutine update_mpas_from_micm(nCellsSolve, nVertLevels, scalars,       &
                                      rho_dry,                                 &
                                      concentrations,                          &
                                      sp_gc_stride, sp_var_stride,            &
-                                     offset, batch_size)
+                                     offset, batch_size,                     &
+                                     n_nonfinite_cells)
 
       integer,                    intent(in)    :: nCellsSolve, nVertLevels
       real (kind=RKIND),          intent(inout) :: scalars(:,:,:)
@@ -115,9 +124,20 @@ contains
       real (kind=real64),         intent(in)    :: concentrations(:)
       integer,                    intent(in)    :: sp_gc_stride, sp_var_stride
       integer,                    intent(in)    :: offset, batch_size
+      integer,                    intent(out), optional :: n_nonfinite_cells
 
       integer :: iCell, k, i_cell, i_local, flat_idx, s
-      real (kind=real64) :: rho_d, mmr_val
+      integer :: n_bad_cells
+      logical :: cell_ok
+      real (kind=real64) :: rho_d, mmr_val, c_val, air_conc, c_max_phys
+
+      ! Magnitude cap: no species can exceed 10× total air density (mol/m³).
+      ! Air density at sea level is ~40 mol/m³; in MICM mol/m³ units no sane
+      ! species concentration should exceed this. Anything larger is a
+      ! solver pathology (e.g. failed DAE init, NaN-cascading rate solve).
+      real (kind=real64), parameter :: AIR_OVER_FACTOR = 10.0_real64
+
+      n_bad_cells = 0
 
       i_cell = 0
       do iCell = 1, nCellsSolve
@@ -128,6 +148,32 @@ contains
             i_local = i_cell - offset
 
             rho_d = real(rho_dry(k, iCell), real64)
+            air_conc = rho_d / MW_AIR
+            c_max_phys = AIR_OVER_FACTOR * air_conc
+
+            ! First pass: validate all advected species in this cell.
+            cell_ok = .true.
+            do s = 1, n_advected
+               flat_idx = (i_local - 1) * sp_gc_stride &
+                        + (advected_micm_idx(s) - 1) * sp_var_stride + 1
+               c_val = concentrations(flat_idx)
+               if (.not. ieee_is_finite(c_val)) then
+                  cell_ok = .false.
+                  exit
+               end if
+               if (abs(c_val) > c_max_phys) then
+                  cell_ok = .false.
+                  exit
+               end if
+            end do
+
+            if (.not. cell_ok) then
+               ! Solver produced a non-finite or unphysical result for this
+               ! cell — preserve pre-solve MPAS values so the failure does
+               ! not propagate via advection. Count for diagnostic logging.
+               n_bad_cells = n_bad_cells + 1
+               cycle
+            end if
 
             ! Advected species: mol/m3 → mmr
             do s = 1, n_advected
@@ -138,6 +184,8 @@ contains
             end do
          end do
       end do
+
+      if (present(n_nonfinite_cells)) n_nonfinite_cells = n_bad_cells
 
    end subroutine update_mpas_from_micm
 

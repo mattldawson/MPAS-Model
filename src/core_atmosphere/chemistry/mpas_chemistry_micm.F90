@@ -94,23 +94,6 @@ contains
       ! Expose solver pointer for species discovery
       micm_solver_ptr => micm_solver
 
-      ! For DAE solvers, increase constraint initialization iterations
-      ! (default 10 is too few when starting far from equilibrium)
-      if (using_dae_solver) then
-         block
-            type(rosenbrock_solver_parameters_t) :: params
-            params = micm_solver%get_rosenbrock_solver_parameters(error)
-            if (error%is_success()) then
-               params%constraint_init_max_iterations = 100
-               params%constraint_init_tolerance = 1.0e-8_real64
-               call micm_solver%set_rosenbrock_solver_parameters(params, error)
-               if (error%is_success()) then
-                  call mpas_log_write('[CheMPAS] DAE constraint init: max_iter=100, tol=1e-8')
-               end if
-            end if
-         end block
-      end if
-
       ! Query maximum grid cells
       max_grid_cells = micm_solver%get_maximum_number_of_grid_cells()
 
@@ -128,6 +111,63 @@ contains
 
       n_micm_species     = micm_state%number_of_species
       n_micm_rate_params = micm_state%number_of_rate_parameters
+
+      ! For DAE solvers, apply tuned solver parameters that match the
+      ! validated Python box-model setup (test_ts1_cloud_box_model.py).
+      ! The default tolerances/step-counts are too loose to handle the
+      ! algebraic-variable swings in cloud chemistry initialization.
+      !
+      ! Per-species absolute tolerances (mirroring box-model "_create_micm"):
+      !   - 1e-9 for CLOUD.AQUEOUS.* species (algebraic)
+      !   - 1e-9 for SO2, H2O2, O3 gas-phase (algebraic in LINEAR_CONSTRAINT)
+      !   - 1e-3 for all other gas-phase species (differential + collectors)
+      ! Plus h_start=0.1, max_number_of_steps=200000,
+      !      constraint_init_max_iterations=100, constraint_init_tolerance=1e-9.
+      if (using_dae_solver) then
+         block
+            type(rosenbrock_solver_parameters_t) :: params
+            character(len=:), allocatable        :: name_str
+            integer                              :: ns, i
+            params = micm_solver%get_rosenbrock_solver_parameters(error)
+            if (.not. error%is_success()) then
+               errmsg = '[CheMPAS] Failed to get solver parameters: ' &
+                        // error%message()
+               errcode = 1; return
+            end if
+
+            ns = micm_state%species_ordering%size()
+            if (allocated(params%absolute_tolerances)) &
+               deallocate(params%absolute_tolerances)
+            allocate(params%absolute_tolerances(ns))
+            params%absolute_tolerances(:) = 1.0e-3_real64
+            do i = 1, ns
+               name_str = micm_state%species_ordering%name(i)
+               if (index(name_str, 'CLOUD.AQUEOUS.') > 0) then
+                  params%absolute_tolerances(i) = 1.0e-9_real64
+               else if (trim(name_str) == 'SO2'  .or. &
+                        trim(name_str) == 'H2O2' .or. &
+                        trim(name_str) == 'O3') then
+                  params%absolute_tolerances(i) = 1.0e-9_real64
+               end if
+            end do
+
+            params%h_start                        = 0.1_real64
+            params%max_number_of_steps            = 200000
+            params%constraint_init_max_iterations = 100
+            params%constraint_init_tolerance      = 1.0e-9_real64
+
+            call micm_solver%set_rosenbrock_solver_parameters(params, error)
+            if (.not. error%is_success()) then
+               errmsg = '[CheMPAS] Failed to set solver parameters: ' &
+                        // error%message()
+               errcode = 1; return
+            end if
+            call mpas_log_write('[CheMPAS] Tuned DAE solver: per-species atol' &
+               // ' (1e-9 aqueous & SO2/H2O2/O3, 1e-3 other),' &
+               // ' h_start=0.1, max_steps=200000,' &
+               // ' constraint_init: max_iter=100, tol=1e-9')
+         end block
+      end if
 
    end subroutine micm_setup
 

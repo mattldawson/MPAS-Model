@@ -129,10 +129,12 @@ contains
             do s = 1, n_emitted
                flat_idx = (i_cell - 1) * rp_gc_stride &
                         + (emitted_rp_idx(s) - 1) * rp_var_stride + 1
-               if (k == nVertLevels) then
-                  ! Bottom (surface) level — compute emission rate
-                  dz = abs(real(zgrid(nVertLevels, iCell) &
-                          - zgrid(nVertLevels + 1, iCell), real64))
+               if (k == 1) then
+                  ! Bottom (surface) level — compute emission rate.
+                  ! In MPAS, vertical index 1 is the lowest model level
+                  ! (surface) and nVertLevels is the model top.
+                  dz = abs(real(zgrid(2, iCell) &
+                          - zgrid(1, iCell), real64))
                   rate = emitted_flux(s) * 1.0e4_real64 / (AVOGADRO * dz)
                   rate_params(flat_idx) = rate
                else

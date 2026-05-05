@@ -128,10 +128,12 @@ contains
             do s = 1, n_deposited
                flat_idx = (i_cell - 1) * rp_gc_stride &
                         + (deposited_rp_idx(s) - 1) * rp_var_stride + 1
-               if (k == nVertLevels) then
-                  ! Bottom (surface) level — compute deposition rate
-                  dz = abs(real(zgrid(nVertLevels, iCell) &
-                          - zgrid(nVertLevels + 1, iCell), real64))
+               if (k == 1) then
+                  ! Bottom (surface) level — compute deposition rate.
+                  ! In MPAS, vertical index 1 is the lowest model level
+                  ! (surface) and nVertLevels is the model top.
+                  dz = abs(real(zgrid(2, iCell) &
+                          - zgrid(1, iCell), real64))
                   rate = deposited_vel(s) * 0.01_real64 / dz
                   rate_params(flat_idx) = rate
                else

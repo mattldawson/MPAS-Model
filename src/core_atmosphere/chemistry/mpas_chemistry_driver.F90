@@ -15,6 +15,7 @@ module mpas_chemistry_driver
    use mpas_timekeeping,    only : mpas_get_clock_time, mpas_get_time, &
                                    MPAS_Time_type
    use iso_fortran_env,     only : real64
+   use ieee_arithmetic,     only : ieee_is_finite
 
    use mpas_chemistry_micm,    only : micm_setup, micm_solve, micm_cleanup, &
                                       micm_state, micm_solver_ptr
@@ -331,7 +332,15 @@ contains
       character(len=512) :: errmsg
       integer :: errcode, iCell, k, ierr
       integer :: year, julday, hour, minute, second
+      integer :: n_nonfinite_cells
       real (kind=RKIND) :: ut_hours
+
+      ! [DIAGNOSTIC] Pre-solve snapshot for first-call failure analysis
+      logical, save :: diag_snapshot_taken = .false.
+      logical, save :: diag_dump_done      = .false.
+      real (kind=real64), allocatable, save :: snap_concs(:)
+      real (kind=real64), allocatable, save :: snap_rps(:)
+      real (kind=real64), allocatable, save :: snap_T(:), snap_P(:), snap_air(:)
 
       if (.not. chemistry_enabled) return
 
@@ -448,6 +457,29 @@ contains
                                    micm_state%rate_parameters_strides%grid_cell, &
                                    micm_state%rate_parameters_strides%variable)
 
+         ! === Phase 2e [DIAGNOSTIC]: snapshot MICM inputs on first call ===
+         ! On the very first chemistry timestep we save the pre-solve state
+         ! (concentrations, rate_parameters, conditions) so that, if the
+         ! solver returns non-finite values for any cell, we can dump that
+         ! cell's complete input state to a CSV for box-model reproduction.
+         if (.not. diag_snapshot_taken) then
+            diag_snapshot_taken = .true.
+            allocate(snap_concs(size(micm_state%concentrations)))
+            allocate(snap_rps(size(micm_state%rate_parameters)))
+            allocate(snap_T(size(micm_state%conditions)))
+            allocate(snap_P(size(micm_state%conditions)))
+            allocate(snap_air(size(micm_state%conditions)))
+            snap_concs = micm_state%concentrations
+            snap_rps   = micm_state%rate_parameters
+            do iCell = 1, size(micm_state%conditions)
+               snap_T(iCell)   = micm_state%conditions(iCell)%temperature
+               snap_P(iCell)   = micm_state%conditions(iCell)%pressure
+               snap_air(iCell) = micm_state%conditions(iCell)%air_density
+            end do
+            call mpas_log_write('[CheMPAS-DIAG] Pre-solve snapshot saved' &
+                                // ' for first-call failure analysis')
+         end if
+
          ! === Phase 3: Solve chemistry ===
          call micm_solve(solve_dt, errmsg, errcode)
          if (errcode /= 0) then
@@ -461,7 +493,34 @@ contains
                                      micm_state%concentrations,                 &
                                      micm_state%species_strides%grid_cell,      &
                                      micm_state%species_strides%variable,       &
-                                     0, nCellsSolve * nVertLevels)
+                                     0, nCellsSolve * nVertLevels,             &
+                                     n_nonfinite_cells)
+
+         if (n_nonfinite_cells > 0) then
+            call mpas_log_write( &
+               '[CheMPAS] WARNING: $i cell(s) had non-finite ' &
+               // 'concentrations after MICM solve; pre-solve values ' &
+               // 'preserved (fault containment).', &
+               intArgs=(/n_nonfinite_cells/))
+         end if
+
+         ! === Phase 4b [DIAGNOSTIC]: dump first-call failing cells ===
+         ! On the first chemistry call, if any cells fail, dump their
+         ! complete pre-solve state to a CSV file (one file per cell, up
+         ! to 5 cells) so the failure can be reproduced in the Python
+         ! box model. Files are written to /mpas/diag/.
+         if (n_nonfinite_cells > 0 .and. .not. diag_dump_done) then
+            diag_dump_done = .true.
+            call diag_dump_failing_cells(nCellsSolve, nVertLevels, &
+                                          latCell, lonCell,         &
+                                          micm_state%concentrations, &
+                                          snap_concs, snap_rps,      &
+                                          snap_T, snap_P, snap_air,  &
+                                          micm_state%species_strides%grid_cell, &
+                                          micm_state%species_strides%variable,  &
+                                          micm_state%rate_parameters_strides%grid_cell, &
+                                          micm_state%rate_parameters_strides%variable)
+         end if
 
          deallocate(temp_2d, pres_2d, rho_2d, photo_all)
 
@@ -469,6 +528,115 @@ contains
       end do
 
    end subroutine chemistry_timestep
+
+
+   !> [DIAGNOSTIC] Dump pre-solve state of cells that failed the chemistry
+   !! solve to per-cell CSV files (under /mpas/diag/). Up to 5 cells.
+   !! Each CSV contains: T, P, air_density, lat, lon, then for every species
+   !! (concentration_pre, concentration_post) and every rate parameter
+   !! (rate_param_pre).
+   subroutine diag_dump_failing_cells(nCellsSolve, nVertLevels,           &
+                                       latCell, lonCell,                  &
+                                       post_concs,                        &
+                                       snap_concs, snap_rps,              &
+                                       snap_T, snap_P, snap_air,          &
+                                       sp_gc_stride, sp_var_stride,       &
+                                       rp_gc_stride, rp_var_stride)
+
+      use musica_util, only : error_t
+
+      integer,            intent(in) :: nCellsSolve, nVertLevels
+      real (kind=RKIND),  intent(in) :: latCell(:), lonCell(:)
+      real (kind=real64), intent(in) :: post_concs(:)
+      real (kind=real64), intent(in) :: snap_concs(:), snap_rps(:)
+      real (kind=real64), intent(in) :: snap_T(:), snap_P(:), snap_air(:)
+      integer,            intent(in) :: sp_gc_stride, sp_var_stride
+      integer,            intent(in) :: rp_gc_stride, rp_var_stride
+
+      integer :: iCell, k, i_cell, s, r, flat_idx, n_dumped
+      integer :: canon_s, canon_r
+      logical :: cell_bad
+      real (kind=real64) :: c_post, c_pre, rp_pre, c_max_phys
+      real (kind=real64), parameter :: AIR_OVER_FACTOR = 10.0_real64
+      character(len=512) :: fname
+      character(len=:), allocatable :: sp_name, rp_name
+      type(error_t) :: ord_err
+      integer :: io, n_species, n_rps
+      integer, parameter :: MAX_DUMPS = 5
+
+      n_species = micm_state%species_ordering%size()
+      n_rps     = micm_state%rate_parameters_ordering%size()
+      n_dumped  = 0
+
+      ! Ensure output directory exists (best-effort; may already exist)
+      call execute_command_line('mkdir -p diag', wait=.true., exitstat=io)
+
+      i_cell = 0
+      cell_loop: do iCell = 1, nCellsSolve
+         do k = 1, nVertLevels
+            i_cell = i_cell + 1
+            if (n_dumped >= MAX_DUMPS) exit cell_loop
+
+            ! Detect failing cell: any species post-value non-finite OR
+            ! magnitude > 10× air density (matches update_mpas_from_micm).
+            c_max_phys = AIR_OVER_FACTOR * snap_air(i_cell)
+            cell_bad = .false.
+            do s = 1, n_advected
+               flat_idx = (i_cell - 1) * sp_gc_stride &
+                        + (advected_micm_idx(s) - 1) * sp_var_stride + 1
+               if (.not. ieee_is_finite(post_concs(flat_idx))) then
+                  cell_bad = .true.; exit
+               end if
+               if (abs(post_concs(flat_idx)) > c_max_phys) then
+                  cell_bad = .true.; exit
+               end if
+            end do
+            if (.not. cell_bad) cycle
+
+            n_dumped = n_dumped + 1
+            write(fname, '("diag/failed_cell_",I5.5,"_k",I2.2,".csv")') iCell, k
+            open(newunit=io, file=trim(fname), status='replace', action='write')
+            write(io,'(A)') '# CheMPAS first-call failing-cell diagnostic dump'
+            write(io,'(A,I0)')      '# iCell=', iCell
+            write(io,'(A,I0)')      '# k=', k
+            write(io,'(A,I0)')      '# i_cell_flat=', i_cell
+            write(io,'(A,F12.6)')   '# lat_deg=', latCell(iCell) * 57.2957795_RKIND
+            write(io,'(A,F12.6)')   '# lon_deg=', lonCell(iCell) * 57.2957795_RKIND
+            write(io,'(A,ES16.8)')  '# T_K=',          snap_T(i_cell)
+            write(io,'(A,ES16.8)')  '# P_Pa=',         snap_P(i_cell)
+            write(io,'(A,ES16.8)')  '# air_mol_per_m3=', snap_air(i_cell)
+            write(io,'(A)') 'kind,name,pre_solve,post_solve'
+            do s = 1, n_species
+               sp_name = micm_state%species_ordering%name(s)
+               canon_s = micm_state%species_ordering%index(trim(sp_name), ord_err)
+               flat_idx = (i_cell - 1) * sp_gc_stride &
+                        + (canon_s - 1) * sp_var_stride + 1
+               c_pre  = snap_concs(flat_idx)
+               c_post = post_concs(flat_idx)
+               write(io,'(A,",",A,",",ES20.12,",",ES20.12)') &
+                  'species', trim(sp_name), c_pre, c_post
+            end do
+            do r = 1, n_rps
+               rp_name = micm_state%rate_parameters_ordering%name(r)
+               canon_r = micm_state%rate_parameters_ordering%index(trim(rp_name), ord_err)
+               flat_idx = (i_cell - 1) * rp_gc_stride &
+                        + (canon_r - 1) * rp_var_stride + 1
+               rp_pre = snap_rps(flat_idx)
+               write(io,'(A,",",A,",",ES20.12,",",A)') &
+                  'rate_param', trim(rp_name), rp_pre, 'NA'
+            end do
+            close(io)
+            call mpas_log_write('[CheMPAS-DIAG] Dumped failing cell ' &
+                                // 'iCell=$i k=$i to ' // trim(fname), &
+                                intArgs=(/iCell, k/))
+         end do
+      end do cell_loop
+
+      call mpas_log_write('[CheMPAS-DIAG] Dumped $i failing cell(s); ' &
+                          // 'first-call diagnostic complete', &
+                          intArgs=(/n_dumped/))
+
+   end subroutine diag_dump_failing_cells
 
 
    !> Run TUV-x photolysis for all columns.

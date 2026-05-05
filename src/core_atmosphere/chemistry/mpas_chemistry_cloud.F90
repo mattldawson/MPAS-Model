@@ -36,8 +36,13 @@ module mpas_chemistry_cloud
    !> MICM species indices for default-concentration species
    integer, allocatable, save :: default_micm_idx(:)
 
-   !> Default concentration values [mol/m3]
+   !> Default concentration values [mol/L water]; converted to mol/m^3 cell
+   !! at apply time using the local LWC (see cloud_set_state).
    real (kind=real64), allocatable, save :: default_conc(:)
+
+   !> Liquid water density [kg/m^3] at ~277 K (cloud-water reference).
+   !! Used to convert default_conc from mol/L water → mol/m^3 cell.
+   real (kind=real64), parameter :: RHO_H2O_KG_PER_M3 = 997.0_real64
 
    !> Number of ALL aqueous species (for concentration floor)
    integer, save :: n_aqueous = 0
@@ -325,11 +330,24 @@ contains
             ! In non-cloud cells (H2O≈1e-30), defaults like Hp=1e-4
             ! are wildly inconsistent with dissolved equilibria and
             ! prevent constraint initialization from converging.
+            !
+            ! default_conc is in mol/L water (literature units). Convert
+            ! to mol/m^3 cell using the local LWC volume fraction:
+            !   conc_cell = conc_per_L * cloud_conc * MW_H2O / rho_H2O * 1000
+            ! This makes seed values physically meaningful (e.g. Hp=1e-4
+            ! mol/L → pH 4) regardless of LWC, instead of producing
+            ! pH<1 in thin clouds and triggering constraint-solver
+            ! divergence (Phase 8 ts1_cloud blowup root cause).
             if (in_cloud) then
+               ! mol_per_L_water → mol_per_m3_cell scale factor
+               ! = LWC_volume_fraction * 1000 L/m^3
+               ! = (cloud_conc * MW_H2O / rho_H2O) * 1000
                do s = 1, n_default
                   flat_idx = (i_cell - 1) * sp_gc_stride &
                            + (default_micm_idx(s) - 1) * sp_var_stride + 1
-                  concentrations(flat_idx) = default_conc(s)
+                  concentrations(flat_idx) = default_conc(s) &
+                       * cloud_conc * cloud_water_mw &
+                       / RHO_H2O_KG_PER_M3 * 1000.0_real64
                end do
             end if
 
