@@ -1,0 +1,2 @@
+# include .txt files in configuration directory
+!**/*.txt

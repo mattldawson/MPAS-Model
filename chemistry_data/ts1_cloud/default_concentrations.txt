@@ -1,0 +1,23 @@
+# Default concentrations [mol L-1 water] for non-advected condensed-phase
+# species. Set at the beginning of each chemistry timestep as initial
+# guesses for aqueous equilibrium calculations.
+#
+# Units are mol per LITER of cloud water (the natural units for aqueous
+# chemistry literature). cloud_set_state converts to mol/m^3 cell using
+# the local LWC: conc_cell = conc_per_L_water * cloud_conc * MW_H2O / rho_H2O * 1000
+# This makes seed values physically meaningful (e.g. Hp=1e-4 mol/L → pH 4)
+# regardless of LWC, instead of accidentally producing pH<1 in thin clouds.
+#
+# Values are deliberately conservative SEEDS (not equilibrium): the
+# DAE constraint solver populates the algebraic species during init.
+# Box-model testing (reproduce_failed_cell.py) shows that seeding too
+# close to equilibrium (e.g. pH 4) trips the constraint solver in some
+# cells; starting near pH 7 with negligible ion concentrations works
+# universally.
+#
+# Format: <MICM species name> <concentration_mol_per_L_water>
+CLOUD.AQUEOUS.Hp 1.0e-7
+CLOUD.AQUEOUS.OHm 1.0e-7
+CLOUD.AQUEOUS.HSO3m 1.0e-10
+CLOUD.AQUEOUS.SO3mm 1.0e-14
+CLOUD.AQUEOUS.SO2OOHm 0.0
