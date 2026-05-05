@@ -28,6 +28,8 @@ RUN dnf -y update && dnf -y install \
         openmpi-devel \
         perl \
         python3 \
+        python3.13-devel \
+        python3-pip \
         wget \
         zlib-devel \
     && dnf clean all
@@ -108,6 +110,14 @@ RUN cd /tmp \
     && mkdir -p /usr/local/share/musica/tuvx_data \
     && cp -r /tmp/musica/configs/tuvx/data/cross_sections /usr/local/share/musica/tuvx_data/ \
     && cp -r /tmp/musica/configs/tuvx/data/quantum_yields /usr/local/share/musica/tuvx_data/ \
+    && mkdir -p /usr/local/share/musica/configs \
+    && cp -r /tmp/musica/configs/v1 /usr/local/share/musica/configs/ \
+    && cp /tmp/musica/build/test_miam_cloud_chemistry /usr/local/bin/ \
+    && mkdir -p /usr/local/share/musica/python_tests \
+    && cp /tmp/musica/python/test/integration/test_miam_cloud_chemistry.py \
+          /usr/local/share/musica/python_tests/ \
+    && python3 -m pip install --no-cache-dir pytest \
+    && python3 -m pip install --no-cache-dir /tmp/musica \
     && rm -rf /tmp/musica
 
 # ---------------------------------------------------------------------------

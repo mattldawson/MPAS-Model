@@ -4,6 +4,9 @@ Visual verification notebooks for each development phase. Each notebook loads
 MPAS output from `data/` (produced by a container run) and plots key fields so
 you can see at a glance that the phase is working.
 
+You'll need `podman` to be installed and running, and have `wget` installed
+locally.
+
 ## Quick Start
 
 ```bash
@@ -12,6 +15,9 @@ bash scripts/setup_and_run.sh      # builds container, compiles MPAS, runs JW te
 
 # Fast debug loop (short MPAS runtime, much quicker turnaround)
 # bash scripts/setup_and_run.sh --quick 1
+
+# To force a rebuild of the model
+# bash scripts/setup_and_run.sh --force-rebuild
 
 # Set up Python for the notebooks
 python3 -m venv .venv

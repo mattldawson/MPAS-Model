@@ -36,7 +36,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MPAS_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-NPROCS="${1:-$(nproc)}"
+NPROCS="${1:-$(nproc 2>/dev/null || sysctl -n hw.logicalcpu)}"
 CONTAINER_RT="${CONTAINER_RT:-podman}"   # or "docker"
 IMAGE="localhost/chempas-dev"
 MUSICA_GIT_REPOSITORY="${MUSICA_GIT_REPOSITORY:-https://github.com/mattldawson/musica.git}"
