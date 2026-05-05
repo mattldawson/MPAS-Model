@@ -131,11 +131,12 @@ contains
       logical :: cell_ok
       real (kind=real64) :: rho_d, mmr_val, c_val, air_conc, c_max_phys
 
-      ! Magnitude cap: no species can exceed 10× total air density (mol/m³).
-      ! Air density at sea level is ~40 mol/m³; in MICM mol/m³ units no sane
-      ! species concentration should exceed this. Anything larger is a
-      ! solver pathology (e.g. failed DAE init, NaN-cascading rate solve).
-      real (kind=real64), parameter :: AIR_OVER_FACTOR = 10.0_real64
+      ! Magnitude cap: no advected species can exceed total air density
+      ! (mol/m³). Atmospheric trace species are <1% of air; H2O peaks at ~3%.
+      ! Anything at or above air density is a solver pathology (e.g. failed
+      ! DAE init, NaN-cascading rate solve) and must not be written back
+      ! into MPAS storage where advection would spread it.
+      real (kind=real64), parameter :: AIR_OVER_FACTOR = 1.0_real64
 
       n_bad_cells = 0
 

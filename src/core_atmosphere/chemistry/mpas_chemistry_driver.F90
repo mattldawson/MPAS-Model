@@ -557,7 +557,7 @@ contains
       integer :: canon_s, canon_r
       logical :: cell_bad
       real (kind=real64) :: c_post, c_pre, rp_pre, c_max_phys
-      real (kind=real64), parameter :: AIR_OVER_FACTOR = 10.0_real64
+      real (kind=real64), parameter :: AIR_OVER_FACTOR = 1.0_real64
       character(len=512) :: fname
       character(len=:), allocatable :: sp_name, rp_name
       type(error_t) :: ord_err

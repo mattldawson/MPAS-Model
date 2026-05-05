@@ -285,11 +285,35 @@ contains
       integer :: iCell, k, i_cell, flat_idx, s
       real (kind=real64) :: rho_d, cloud_conc
       logical, save :: diag_printed = .false.
+      logical, save :: first_call = .true.
       integer :: n_cloud_cells
       real (kind=real64) :: max_cloud_conc
       logical :: in_cloud
 
       if (cloud_water_micm_idx < 1 .and. n_default == 0) return
+
+      ! After the first chemistry timestep, cloud water and all aqueous
+      ! condensed-phase species are advected by MPAS (see advected_species.txt).
+      ! We only seed them once at the very start of the run; thereafter the
+      ! values flowing in from MPAS scalar transport are authoritative and
+      ! must not be reset (resetting them every step throws away dissolved
+      ! S(IV) accumulated during chemistry, suppressing SO4 production).
+      ! All we still do per-step is floor any aqueous species to a tiny
+      ! positive value to avoid division-by-zero in dissolved-reaction rates.
+      if (.not. first_call) then
+         i_cell = 0
+         do iCell = 1, nCellsSolve
+            do k = 1, nVertLevels
+               i_cell = i_cell + 1
+               do s = 1, n_aqueous
+                  flat_idx = (i_cell - 1) * sp_gc_stride &
+                           + (aqueous_micm_idx(s) - 1) * sp_var_stride + 1
+                  concentrations(flat_idx) = max(concentrations(flat_idx), 1.0e-30_real64)
+               end do
+            end do
+         end do
+         return
+      end if
 
       n_cloud_cells = 0
       max_cloud_conc = 0.0_real64
@@ -377,6 +401,9 @@ contains
          call mpas_log_write('[CheMPAS-Cloud] DIAG: sp_gc_stride=$i, sp_var_stride=$i', &
                              intArgs=(/sp_gc_stride, sp_var_stride/))
       end if
+
+      ! Mark first-call seeding as done — subsequent calls only floor.
+      first_call = .false.
 
    end subroutine cloud_set_state
 
