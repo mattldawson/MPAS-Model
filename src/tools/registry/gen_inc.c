@@ -2684,7 +2684,7 @@ const char *varname;
 	fortprintf(fd, "      use mpas_runtime_vars, only : MPAS_var, MPAS_var_array, MPAS_VAR_REAL, MPAS_VAR_INTEGER, MPAS_VAR_CHARACTER, MPAS_VAR_LOGICAL\n");
 	fortprintf(fd, "      use mpas_pool_routines\n");
 	fortprintf(fd, "      use mpas_io, only : MPAS_REAL_FILLVAL, MPAS_INT_FILLVAL, MPAS_CHAR_FILLVAL\n");
-	fortprintf(fd, "      use mpas_runtime_vars, only : test_cb\n");
+	fortprintf(fd, "      use mpas_runtime_vars, only : MPAS_var_run_callback\n");
 	fortprintf(fd, "\n");
 	fortprintf(fd, "      implicit none\n");
 	fortprintf(fd, "\n");
@@ -2872,7 +2872,7 @@ int generate_var_array(FILE *fd, ezxml_t registry, ezxml_t superStruct, ezxml_t 
 		generate_var(fd, registry, superStruct, var_xml, vardims, vartype, vargroup, 1);
 	}
 
-	fortprintf(fd, "      call test_cb(newSubPool, newVarArray, \'%s\', \'%s\')\n", structname, vararrname);
+	fortprintf(fd, "      call MPAS_var_run_callback(newSubPool, newVarArray, \'%s\', \'%s\')\n", structname, vararrname);
 
 	fortprintf(fd, "      call newVarArray %% add_to_pool(block, newSubPool, block %% packages, useNameInCode=.true.)\n");
 	fortprintf(fd, "      call newVarArray %% add_to_pool(block, block %% allFields, block %% packages, addIndices=.false.)\n");

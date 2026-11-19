@@ -23,9 +23,28 @@ module mpas_atm_chemistry
 
     private
 
-    public :: chemistry_init, chemistry_step, chemistry_finalize
+    public :: chemistry_set_initial_conditions, chemistry_init, chemistry_step, chemistry_finalize
 
     contains
+
+    !------------------------------------------------------------------------
+    !  routine chemistry_set_initial_conditions
+    !
+    !> \brief Sets initial values for runtime-registered chemistry variables
+    !> \details
+    !>  This routine sets initial conditions for any variables registered
+    !>  at runtime by chemistry modules.
+    !------------------------------------------------------------------------
+    subroutine chemistry_set_initial_conditions(block)
+
+        use mpas_derived_types, only : block_type
+        use mpas_quacs, only: quacs_set_initial_conditions
+
+        type (block_type), pointer :: block
+
+        call quacs_set_initial_conditions(block)
+
+    end subroutine chemistry_set_initial_conditions
 
     !------------------------------------------------------------------------
     !  routine chemistry_init

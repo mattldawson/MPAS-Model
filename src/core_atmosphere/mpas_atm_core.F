@@ -37,7 +37,7 @@ module atm_core
       use mpas_string_utils, only : mpas_string_replace
       use mpas_atm_halos, only: atm_build_halo_groups, exchange_halo_group
 #ifdef DO_CHEMISTRY
-      use mpas_atm_chemistry, only: chemistry_init
+      use mpas_atm_chemistry, only: chemistry_init, chemistry_set_initial_conditions
 #endif
 
       implicit none
@@ -213,6 +213,9 @@ module atm_core
          block => domain % blocklist
          do while (associated(block))
             call mpas_pool_get_subpool(block % structs, 'state', state)
+#ifdef DO_CHEMISTRY
+            call chemistry_set_initial_conditions(block)
+#endif
             call mpas_pool_initialize_time_levels(state)
             block => block % next
          end do

@@ -186,6 +186,10 @@ cat > namelist.atmosphere << 'EOF'
     config_bucket_update = 'none'
     config_physics_suite = 'none'
 /
+
+&quacs
+    config_quacs_test_variables = true
+/
 EOF
 
 # ---- Create atmosphere streams ----
@@ -217,6 +221,13 @@ cat > streams.atmosphere << 'EOF'
     <var name="theta"/>
     <var name="uReconstructZonal"/>
     <var name="uReconstructMeridional"/>
+    <var_array name="scalars"/>
+    <var name="quacs_test_cell"/>
+    <var name="quacs_test_interface"/>
+    <var name="quacs_test_column"/>
+    <var name="quacs_test_count"/>
+    <var name="quacs_test_flag"/>
+    <var name="quacs_test_scalar"/>
 
 </stream>
 
@@ -251,7 +262,11 @@ touch stream_list.atmosphere.diag_ugwp
 
 # ---- Run atmosphere_model ----
 echo "=== Running JW baroclinic wave (1 day, 480-km mesh) ==="
-mpirun ${MPIRUN_OPTS} ./atmosphere_model
+if ! mpirun ${MPIRUN_OPTS} ./atmosphere_model; then
+    echo "ERROR: atmosphere_model failed" >&2
+    cat log.atmosphere.0000.err 2>/dev/null || tail -20 log.atmosphere.0000.out
+    exit 1
+fi
 echo ""
 
 # Check for errors

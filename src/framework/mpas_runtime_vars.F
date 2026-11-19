@@ -39,11 +39,16 @@ module mpas_runtime_vars
     public :: MPAS_var, &
               MPAS_var_array
 
-    public :: MPAS_var_add_callback
+    public :: MPAS_var_add_callback, &
+              MPAS_var_run_callback
 
-    integer, parameter, public :: MPAS_VAR_OK            =     0, &
-                                  MPAS_VAR_INVALID_TYPE  = -1000, &
-                                  MPAS_VAR_INVALID_NDIMS = -1001
+
+    integer, parameter, public :: MPAS_VAR_OK                 =     0, &
+                                  MPAS_VAR_INVALID_TYPE       = -1000, &
+                                  MPAS_VAR_INVALID_NDIMS      = -1001, &
+                                  MPAS_VAR_INCOMPATIBLE       = -1002, &
+                                  MPAS_VAR_CALLBACKS_RUNNING  = -1003, &
+                                  MPAS_VAR_DUPLICATE_CALLBACK = -1004
 
     integer, parameter, public :: MPAS_VAR_INTEGER   = 1000, &
                                   MPAS_VAR_REAL      = 1001, &
@@ -150,9 +155,19 @@ module mpas_runtime_vars
         end subroutine mpas_runtime_var_callback
     end interface
 
-    procedure (mpas_runtime_var_callback), pointer :: test_cb => null()
-    public :: test_cb
+    type callback_entry
+        character(len=ShortStrKIND) :: poolName = ''
+        character(len=ShortStrKIND) :: varArrayName = ''
+        procedure (mpas_runtime_var_callback), pointer, nopass :: callback => null()
+    end type callback_entry
 
+    ! Registererd callbacks
+    type(linked_list) :: callbacks
+
+    ! Prevents callbacks from registering other callbacks, which doesn't work with the
+    ! linked-list iteration
+    logical :: running_callbacks = .false.
+    
 
 contains
 
@@ -202,6 +217,7 @@ contains
         type (field3DReal), pointer :: real3d_ptr
         type (field0DChar), pointer :: char0d_ptr
         character(len=ShortStrKIND) :: name_in_pool
+        integer :: var_type
 
         if (present(ierr)) ierr = MPAS_VAR_OK
 
@@ -218,7 +234,11 @@ contains
         call mpas_split_string_new(self % dimensions, ' ', dimensions)
         ndims = size(dimensions)
 
-        select case (self % vartype)
+        ! Logical variables are stored as integers: 0 for .false.; 1 for .true.
+        var_type = self % vartype
+        if (var_type == MPAS_VAR_LOGICAL) var_type = MPAS_VAR_INTEGER
+
+        select case (var_type)
         case (MPAS_VAR_INTEGER)
 
             select case (ndims)
@@ -254,6 +274,10 @@ contains
 
                         call mpas_add_att(int0d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int0d_ptr % attLists(1) % attList, 'long_name', self % description)
+                        if (self % vartype == MPAS_VAR_LOGICAL) then
+                            call mpas_add_att(int0d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
+                            call mpas_add_att(int0d_ptr % attLists(1) % attList, 'flag_meanings', 'false true')
+                        endif
                     end do
 
                 end if
@@ -297,6 +321,10 @@ contains
 
                         call mpas_add_att(int1d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int1d_ptr % attLists(1) % attList, 'long_name', self % description)
+                        if (self % vartype == MPAS_VAR_LOGICAL) then
+                            call mpas_add_att(int1d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
+                            call mpas_add_att(int1d_ptr % attLists(1) % attList, 'flag_meanings', 'false, true')
+                        endif
                     end do
 
                 end if
@@ -341,6 +369,10 @@ contains
 
                         call mpas_add_att(int2d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int2d_ptr % attLists(1) % attList, 'long_name', self % description)
+                        if (self % vartype == MPAS_VAR_LOGICAL) then
+                            call mpas_add_att(int2d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
+                            call mpas_add_att(int2d_ptr % attLists(1) % attList, 'flag_meanings', 'false, true')
+                        endif
                     end do
 
                 end if
@@ -656,39 +688,37 @@ contains
 
 
     !-----------------------------------------------------------------------
-    !  routine foo_bar
+    !  routine add_constituent
     !
-    !> \brief Foos the bar
+    !> \brief Adds a constituent variable to an MPAS variable array.
     !> \author Michael Duda
     !> \date   22 August 2028
     !> \details
-    !>  This routine returns a pointer to a newly allocated instance of an
-    !>  MPAS_streamInfo_type. The new instance has valid methods init(), query(),
-    !>  and finalize() that may be called.
-    !>
-    !>  After all queries via the MPAS_streamInfo_type instance have been
-    !>  completed, the instance finalize() method should be called before the
-    !>  instance is deallocated.
+    !>  This routine ...
     !
     !-----------------------------------------------------------------------
-    subroutine add_constituent(self, constituent, group)
+    subroutine add_constituent(self, constituent, group, ierr)
+
+        use mpas_log, only : mpas_log_write
+        use mpas_derived_types, only : MPAS_LOG_ERR
 
         ! Arguments
         class (MPAS_var_array), intent(inout) :: self
         type (MPAS_var), intent(in) :: constituent
         character(len=*), intent(in) :: group
+        integer, optional, intent(out) :: ierr
 
         ! Local variables
         integer :: i, ndims
         character(len=:), dimension(:), allocatable :: dimensions
         type (MPAS_var), pointer :: const_copy
+        logical :: compatible
 
         call mpas_split_string_new(constituent % dimensions, ' ', dimensions)
         ndims = size(dimensions)
 
         if (self % ndims == -1) then
 
-            ! write(0,*) 'Adding first constituent '//trim(constituent % name)
             self % ndims = ndims + 1
             self % vartype = constituent % vartype
             allocate(self % dimensions(self % ndims))
@@ -701,18 +731,18 @@ contains
             ! a whole has a time dimension or not
             self % hasTimeDimension = constituent % hasTimeDimension
         else
-            ! write(0,*) 'Adding constituent '//trim(constituent % name)
-            if ((self % ndims - 1) /= ndims) then
-                write(0,*) 'Constituent dimensions incompatible...'
+            compatible = (self % ndims - 1 == ndims) .and. (self % vartype == constituent % vartype)
+            if (compatible) then
+                do i = 1, ndims
+                    if (trim(self % dimensions(i+1)) /= trim(dimensions(i))) compatible = .false.
+                end do
             end if
-            if (self % vartype /= constituent % vartype) then
-                write(0,*) 'Constituent type incompatible...'
+            if (.not. compatible) then
+                call mpas_log_write('Constituent '//trim(constituent % name)//' does not match the type or '// &
+                                    'dimensions of var_array '//trim(self % name), messagetype=MPAS_LOG_ERR)
+                if (present(ierr)) ierr = MPAS_VAR_INCOMPATIBLE
+                return
             end if
-            do i = 1, ndims
-                if (trim(self % dimensions(i+1)) /= trim(dimensions(i))) then
-                    write(0,*) 'Constituent dimension incompatible...'
-                end if
-            end do
         end if
 
         deallocate(dimensions)
@@ -794,7 +824,6 @@ contains
 
         call sort_constituents(self % const_list, sorted_list, packagePool)
 
-        write(0,*) 'num_'//trim(self % name)//' = ', sorted_list % length()
         call mpas_pool_add_dimension(fieldPool, 'num_'//trim(self % name), sorted_list % length())
 
         call sorted_list % begin_iteration()
@@ -808,28 +837,22 @@ contains
         if (addIndices_local) then
 
             if (ncnst > 0) then
-                write(0,*) trim(current_cnst % group)//'_start = ', 1
                 call mpas_pool_add_dimension(fieldPool, trim(current_cnst % group)//'_start', 1)
             end if
 
             do idx = 1, ncnst
                 nullify(cursor_cnst)
                 PTR_CAST(cursor, cursor_cnst, MPAS_var)
-                write(0,*) 'MGD idx = ', idx, &
-                           ' cnst = '//trim(cursor_cnst % name_in_code)//' group = '//trim(cursor_cnst % group)
                 call mpas_pool_add_dimension(fieldPool, 'index_'//trim(cursor_cnst % name_in_code), idx)
 
                 if (trim(cursor_cnst % group) /= trim(current_cnst % group)) then
-                    write(0,*) trim(current_cnst % group)//'_end = ', idx - 1
                     call mpas_pool_add_dimension(fieldPool, trim(current_cnst % group)//'_end', idx - 1)
-                    write(0,*) 'num_'//trim(current_cnst % group)//' = ', n - 1
                     call mpas_pool_add_dimension(fieldPool, 'num_'//trim(current_cnst % group), n - 1)
 
                     n = 1
                     current => cursor
                     nullify(current_cnst)
                     PTR_CAST(current, current_cnst, MPAS_var)
-                    write(0,*) trim(current_cnst % group)//'_start = ', idx
                     call mpas_pool_add_dimension(fieldPool, trim(current_cnst % group)//'_start', idx)
                 end if
 
@@ -838,9 +861,7 @@ contains
             end do
 
             if (ncnst > 0) then
-                write(0,*) trim(current_cnst % group)//'_end = ', idx - 1
                 call mpas_pool_add_dimension(fieldPool, trim(current_cnst % group)//'_end', idx - 1)
-                write(0,*) 'num_'//trim(current_cnst % group)//' = ', n - 1
                 call mpas_pool_add_dimension(fieldPool, 'num_'//trim(current_cnst % group), n - 1)
             end if
 
@@ -893,7 +914,6 @@ contains
                         real3d_ptr % isPersistent = self % isPersistent
 
                         allocate(real3d_ptr % attLists(ncnst))
-                        if (ncnst > 0) allocate(real3d_ptr % attLists(ncnst) % attList)
 
                         allocate(real3d_ptr % constituentNames(ncnst))
 
@@ -903,6 +923,7 @@ contains
                             nullify(cursor_cnst)
                             PTR_CAST(cursor, cursor_cnst, MPAS_var)
                             real3d_ptr % constituentNames(idx) = trim(cursor_cnst % name)
+                            allocate(real3d_ptr % attLists(idx) % attList)
                             call mpas_add_att(real3d_ptr % attLists(idx) % attList, 'units', &
                                               cursor_cnst % units)
                             call mpas_add_att(real3d_ptr % attLists(idx) % attList, 'long_name', &
@@ -996,13 +1017,9 @@ contains
             do while (associated(cursor))
                 nullify(cursor_cnst)
                 PTR_CAST(cursor, cursor_cnst, MPAS_var)
-
-                write(0,*) 'Deallocating '//trim(cursor_cnst % name)
                 deallocate(cursor_cnst)
-
                 cursor => self % const_list % get_next_item()
             end do
-
             deallocate(self % const_list)
         end if
 
@@ -1010,37 +1027,108 @@ contains
 
 
     !-----------------------------------------------------------------------
-    !  routine foo_bar
+    !  routine MPAS_var_add_callback
     !
     !> \brief Foos the bar
     !> \author Michael Duda
     !> \date   22 August 2028
     !> \details
-    !>  This routine returns a pointer to a newly allocated instance of an
-    !>  MPAS_streamInfo_type. The new instance has valid methods init(), query(),
-    !>  and finalize() that may be called.
+    !>  This routine registers a callback function for a run-time specified
+    !> `poolName`/`varArrayName` combination. The callback will be used to
+    !> populate the corresponding array after it is allocated.
     !>
-    !>  After all queries via the MPAS_streamInfo_type instance have been
-    !>  completed, the instance finalize() method should be called before the
-    !>  instance is deallocated.
+    !> Callbacks cannot be registered by other callbacks. If this is
+    !> attempted, this function fails with `MPAS_VAR_CALLBACKS_RUNNING`. Only
+    !> one callback can be specified for a `poolName`/`varArrayName`
+    !> combination. Any attempt to overwrite a registered callback fails with
+    !> `MPAS_VAR_DUPLICATE_CALLBACK`.
     !
     !-----------------------------------------------------------------------
-    subroutine MPAS_var_add_callback(poolName, varArrayName, callback)
+    subroutine MPAS_var_add_callback(poolName, varArrayName, callback, ierr)
 
         implicit none
 
         ! Arguments
         character(len=*), intent(in) :: poolName, varArrayName
-        procedure (mpas_runtime_var_callback), pointer :: callback
+        procedure (mpas_runtime_var_callback) :: callback
+        integer, optional, intent(out) :: ierr
 
         ! Local variables
+        class(*), pointer :: cursor
+        type(callback_entry), pointer :: registered
 
-        ! call mpas_log_write('registring callback for '//trim(poolName)//' '//trim(varArrayName))
+        if (present(ierr)) ierr = MPAS_VAR_OK
 
-        test_cb => callback
+        if (running_callbacks) then
+            if (present(ierr)) ierr = MPAS_VAR_CALLBACKS_RUNNING
+            return
+        end if
+
+        call callbacks % begin_iteration()
+        cursor => callbacks % get_next_item()
+        do while (associated(cursor))
+            nullify(registered)
+            PTR_CAST(cursor, registered, callback_entry)
+            if (trim(registered % poolName) == trim(poolName) &
+                .and. trim(registered % varArrayName) == trim(varArrayName)) then
+                if (present(ierr)) ierr = MPAS_VAR_DUPLICATE_CALLBACK
+                return
+            end if
+            cursor => callbacks % get_next_item()
+        end do
+
+        allocate(registered)
+        registered % poolName = poolName
+        registered % varArrayName = varArrayName
+        registered % callback => callback
+        call callbacks % insert(trim(poolName)//'/'//trim(varArrayName), registered)
 
     end subroutine MPAS_var_add_callback
 
+    !-----------------------------------------------------------------------
+    !  routine MPAS_var_run_callback
+    !
+    !> \brief Runs each of the registered callback functions
+    !> \author Matt Dawson
+    !> \date   19 November 2028
+    !> \details
+    !>  This routine runs the callback function regsitered for a specific
+    !> `poolName`/`varArrayName` combination.
+    !>
+    !> The callback is responsible for populating the provided `newVarArray`
+    !
+    !-----------------------------------------------------------------------
+    subroutine MPAS_var_run_callback(structPool, newVarArray, poolName, varArrayName)
+
+        implicit none
+
+        ! Arguments
+        type (mpas_pool_type), intent(inout) :: structPool
+        type (MPAS_var_array), intent(inout) :: newVarArray
+        character(len=*), intent(in) :: poolName, varArrayName
+
+        ! Local variables
+        class (*), pointer :: cursor
+        type (callback_entry), pointer :: registered
+
+        running_callbacks = .true.
+
+        call callbacks % begin_iteration()
+        cursor => callbacks % get_next_item()
+        do while (associated(cursor))
+            nullify(registered)
+            PTR_CAST(cursor, registered, callback_entry)
+            if (trim(registered % poolName) == trim(poolName) &
+                .and. trim(registered % varArrayName) == trim(varArrayName)) then
+                call registered % callback(structPool, newVarArray, poolName, varArrayName)
+                exit
+            end if
+            cursor => callbacks % get_next_item()
+        end do
+
+        running_callbacks = .false.
+
+    end subroutine MPAS_var_run_callback
 
     !-----------------------------------------------------------------------
     !  routine foo_bar
@@ -1083,7 +1171,6 @@ contains
             PTR_CAST(cursor, cursor_cnst, MPAS_var)
 
             if (contains_active_package(cursor_cnst % packages, packagePool)) then
-                ! write(0,*) trim(cnst % name) // ' contains active packages and will be used'
                 call tmp_list % insert(trim(cursor_cnst % name), cursor_cnst)
             end if
 
@@ -1103,7 +1190,6 @@ contains
             PTR_CAST(current, current_cnst, MPAS_var)
 
             ! Add first item to sorted_list and remove it from tmp_list
-            write(0,*) 'Adding '//trim(current_cnst % name)//' to sorted_list ('//trim(current_cnst % group)//')'
             call sorted_list % insert(trim(current_cnst % name), current_cnst)
             cursor => tmp_list % get_next_item()
             x => tmp_list % remove(trim(current_cnst % name))
@@ -1112,7 +1198,6 @@ contains
                 nullify(cursor_cnst)
                 PTR_CAST(cursor, cursor_cnst, MPAS_var)
                 if (trim(cursor_cnst % group) == trim(current_cnst % group)) then
-                    write(0,*) 'Adding '//trim(cursor_cnst % name)//' to sorted_list ('//trim(cursor_cnst % group)//')'
                     call sorted_list % insert(trim(cursor_cnst % name), cursor_cnst)
                     cursor => tmp_list % get_next_item()
                     x => tmp_list % remove(trim(cursor_cnst % name))
@@ -1218,6 +1303,8 @@ contains
     !-----------------------------------------------------------------------
     logical function contains_active_package(packageList, packagePool)
 
+        use mpas_derived_types, only : MPAS_LOG_ERR
+        use mpas_log, only : mpas_log_write
         use mpas_pool_routines, only : mpas_pool_get_package
 
         implicit none
@@ -1249,7 +1336,6 @@ contains
         call mpas_split_string_new(packageList, ';', packages)
 
         do i = 1, size(packages)
-            ! write(0,*) 'Considering package '//trim(packages(i))
             nullify(active)
             call mpas_pool_get_package(packagePool, trim(packages(i))//'Active', active)
             if (associated(active)) then
@@ -1258,7 +1344,7 @@ contains
                     exit
                 end if
             else
-                write(0,*) 'Package does not exist: '//trim(packages(i))
+                call mpas_log_write('Package '//packages(i)//' does not exist', messagetype=MPAS_LOG_ERR)
             end if
         end do
 

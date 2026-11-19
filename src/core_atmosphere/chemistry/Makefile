@@ -13,7 +13,10 @@ dummy:
 	echo "****** compiling chemistry ******"
 
 OBJS = \
+	mpas_quacs.o \
 	mpas_atm_chemistry.o
+
+mpas_atm_chemistry.o: mpas_quacs.o
 
 ifeq ($(MUSICA),true)
 core_mpas_musica:

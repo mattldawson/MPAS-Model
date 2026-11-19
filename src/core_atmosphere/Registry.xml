@@ -458,6 +458,14 @@
                      possible_values="Any valid filename"/>
         </nml_record>
 #endif
+#ifdef DO_CHEMISTRY
+        <nml_record name="quacs" in_defaults="true">
+                <nml_option name="config_quacs_test_variables" type="logical" default_value="false"
+                     units="-"
+                     description="Whether to create a set of test variables at runtime for QUACS"
+                     possible_values=".true. or .false."/>
+        </nml_record>
+#endif
 
 <!-- **************************************************************************************** -->
 <!-- **************************************  Packages  ************************************** -->
