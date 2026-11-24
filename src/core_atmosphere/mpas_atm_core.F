@@ -1041,7 +1041,7 @@ module atm_core
 #endif
 
 #ifdef DO_CHEMISTRY
-      call chemistry_step()
+      call chemistry_step(domain % blocklist)
 #endif
 
       call atm_timestep(domain, dt, currTime, itimestep, exchange_halo_group)
@@ -1086,7 +1086,7 @@ module atm_core
       ! Finalize chemistry
       !
 #ifdef DO_CHEMISTRY
-      call chemistry_finalize()
+      call chemistry_finalize(domain % configs)
 #endif
 
       call mpas_atm_diag_cleanup()

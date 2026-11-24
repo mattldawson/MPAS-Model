@@ -18,7 +18,7 @@ This document describes how to get up-and-running as a QUACS developer. It cover
 ## Setup
 ### Option 1: Developing inside the VS Code Dev Container (recommended)
 
-The `.devcontainer/` configuration mounts the repository source at `/mpas` inside a pre-built container that has all build dependencies (MPI, NetCDF, PnetCDF, MUSICA, etc.) already installed.
+The `.devcontainer/` configuration mounts the repository source at `/mpas` inside a pre-built container that has all build dependencies (MPI, NetCDF, PnetCDF, MUSICA, QUACS, etc.) already installed.
 
 1. **Open the repo in VS Code** and, when prompted, click **Reopen in Container**.  
    Alternatively, open the Command Palette (`Ctrl+Shift+P`) and run **Dev Containers: Reopen in Container**.
@@ -32,7 +32,7 @@ The `.devcontainer/` configuration mounts the repository source at `/mpas` insid
 
 4. **Build the atmosphere core**:
    ```bash
-   make -j$(nproc) gnu CORE=atmosphere AUTOCLEAN=true MUSICA=true
+   make -j$(nproc) gnu CORE=atmosphere AUTOCLEAN=true MUSICA=true QUACS=true
    ```
    Both executables (`init_atmosphere_model`, `atmosphere_model`) are placed in `/mpas`.
 
@@ -80,8 +80,44 @@ These steps assume the executables have already been built (see above).
    ```
    Output is written to `data/jw_480km/output.nc`.
 
+   The test runs the QUACS conformance checks in `quacs/conformance_config.py` at the
+   start of the run and in every time step, and fails unless every check passes on
+   every MPI rank. The results are at the end of `data/jw_480km/log.atmosphere.0000.out`.
 
 ---
+
+## Running QUACS parameterizations
+
+QUACS runs when MPAS is built with `QUACS=true` and the `&quacs` namelist record names a
+QUACS configuration file:
+
+```
+&quacs
+    config_quacs_config_file = 'my_config.py'
+/
+```
+
+The configuration file is a Python file that sets `parameterizations` and `hooks`
+(see `embed/README.md` in the QUACS repository). It must list both of the hooks that
+MPAS runs, even if no parameterizations are run in one of them:
+
+| Hook | When MPAS runs it |
+|------|-------------------|
+| `initial_conditions` | Once, at the start of a non-restart run, before the first time step. |
+| `before_dynamics` | Once per time step, before the dynamics |
+
+### How MPAS provides variables to QUACS
+
+- A variable that a QUACS parameterization owns is created by MPAS. If it is transported, it
+  becomes a constituent of `scalars`. Otherwise, it becomes a field that can be added to an
+  output stream by name.
+- Any other variable must be an MPAS field of the same name, or a constituent of `scalars`
+  such as `qv`.
+- Parameterizations work on every cell of a block, including halo cells.
+
+The container image installs QUACS in the Python virtual environment `/usr/local/quacs-venv`.
+Set the `QUACS_PYTHON` environment variable to the `python` of another virtual environment
+where QUACS is installed to use that QUACS instead.
 
 ## CI/CD
 

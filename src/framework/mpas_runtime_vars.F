@@ -275,7 +275,6 @@ contains
                         call mpas_add_att(int0d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int0d_ptr % attLists(1) % attList, 'long_name', self % description)
                         if (self % vartype == MPAS_VAR_LOGICAL) then
-                            call mpas_add_att(int0d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
                             call mpas_add_att(int0d_ptr % attLists(1) % attList, 'flag_meanings', 'false true')
                         endif
                     end do
@@ -322,8 +321,7 @@ contains
                         call mpas_add_att(int1d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int1d_ptr % attLists(1) % attList, 'long_name', self % description)
                         if (self % vartype == MPAS_VAR_LOGICAL) then
-                            call mpas_add_att(int1d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
-                            call mpas_add_att(int1d_ptr % attLists(1) % attList, 'flag_meanings', 'false, true')
+                            call mpas_add_att(int1d_ptr % attLists(1) % attList, 'flag_meanings', 'false true')
                         endif
                     end do
 
@@ -370,8 +368,7 @@ contains
                         call mpas_add_att(int2d_ptr % attLists(1) % attList, 'units', self % units)
                         call mpas_add_att(int2d_ptr % attLists(1) % attList, 'long_name', self % description)
                         if (self % vartype == MPAS_VAR_LOGICAL) then
-                            call mpas_add_att(int2d_ptr % attLists(1) % attList, 'flag_values', (/0, 1/))
-                            call mpas_add_att(int2d_ptr % attLists(1) % attList, 'flag_meanings', 'false, true')
+                            call mpas_add_att(int2d_ptr % attLists(1) % attList, 'flag_meanings', 'false true')
                         endif
                     end do
 

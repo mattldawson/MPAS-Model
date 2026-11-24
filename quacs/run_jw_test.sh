@@ -188,9 +188,13 @@ cat > namelist.atmosphere << 'EOF'
 /
 
 &quacs
-    config_quacs_test_variables = true
+    config_quacs_config_file = 'quacs_config.py'
+    config_quacs_check_conformance = true
 /
 EOF
+
+# ---- Link the QUACS configuration that checks the MPAS integration ----
+ln -sf "${MPAS_DIR}/quacs/conformance_config.py" quacs_config.py
 
 # ---- Create atmosphere streams ----
 cat > streams.atmosphere << 'EOF'
@@ -222,12 +226,12 @@ cat > streams.atmosphere << 'EOF'
     <var name="uReconstructZonal"/>
     <var name="uReconstructMeridional"/>
     <var_array name="scalars"/>
-    <var name="quacs_test_cell"/>
-    <var name="quacs_test_interface"/>
-    <var name="quacs_test_column"/>
-    <var name="quacs_test_count"/>
-    <var name="quacs_test_flag"/>
-    <var name="quacs_test_scalar"/>
+    <var name="quacs_check_cell_visits"/>
+    <var name="quacs_check_level"/>
+    <var name="quacs_check_interface_number"/>
+    <var name="quacs_check_cell_tag"/>
+    <var name="quacs_check_column_swept"/>
+    <var name="quacs_check_vertical_order"/>
 
 </stream>
 
@@ -280,6 +284,18 @@ if [ ! -f output.nc ]; then
     echo "ERROR: atmosphere_model did not produce output.nc" >&2
     exit 1
 fi
+
+# Check the QUACS conformance report
+if grep -l "QUACS conformance" log.atmosphere.*.err > /dev/null 2>&1; then
+    echo "ERROR: QUACS conformance checks failed" >&2
+    grep -h -A 2 "FAIL" $(grep -l "QUACS conformance" log.atmosphere.*.err) | head -60
+    exit 1
+fi
+if ! grep -q "QUACS conformance: \([0-9][0-9]*\) of \1 checks passed" log.atmosphere.0000.out; then
+    echo "ERROR: no passing QUACS conformance report in log.atmosphere.0000.out" >&2
+    exit 1
+fi
+grep "QUACS conformance" log.atmosphere.0000.out
 
 echo "  atmosphere_model succeeded"
 echo ""

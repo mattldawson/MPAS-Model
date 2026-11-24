@@ -105,7 +105,7 @@ jobs:
       - name: Build atmosphere core
         run: |
           docker run --rm -v "${{ github.workspace }}:/workspace" -w /workspace "${LOCAL_IMAGE}" \
-            bash -c 'make -j"$(nproc)" gnu CORE=atmosphere AUTOCLEAN=true'
+            bash -c 'make -j"$(nproc)" gnu CORE=atmosphere AUTOCLEAN=true QUACS=true'
 
       - name: Verify executables
         run: |

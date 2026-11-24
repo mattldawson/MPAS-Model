@@ -460,9 +460,14 @@
 #endif
 #ifdef DO_CHEMISTRY
         <nml_record name="quacs" in_defaults="true">
-                <nml_option name="config_quacs_test_variables" type="logical" default_value="false"
+                <nml_option name="config_quacs_config_file" type="character" default_value=""
                      units="-"
-                     description="Whether to create a set of test variables at runtime for QUACS"
+                     description="QUACS configuration file, which names the parameterizations to run and the hooks they run in. QUACS is not used if this is empty."
+                     possible_values="Any valid filename"/>
+
+                <nml_option name="config_quacs_check_conformance" type="logical" default_value="false"
+                     units="-"
+                     description="Whether to write the results of the QUACS conformance checks in the QUACS configuration file to the log at the end of the run"
                      possible_values=".true. or .false."/>
         </nml_record>
 #endif

@@ -38,11 +38,12 @@ module mpas_atm_chemistry
     subroutine chemistry_set_initial_conditions(block)
 
         use mpas_derived_types, only : block_type
-        use mpas_quacs, only: quacs_set_initial_conditions
+        use mpas_quacs, only: quacs_run_hook
 
+        ! Arguments
         type (block_type), pointer :: block
 
-        call quacs_set_initial_conditions(block)
+        call quacs_run_hook(block, 'initial_conditions')
 
     end subroutine chemistry_set_initial_conditions
 
@@ -105,17 +106,24 @@ module mpas_atm_chemistry
     !>  This routine steps the chemistry packages, updating their state
     !>  based on the current simulation time and conditions.
     !------------------------------------------------------------------------
-    subroutine chemistry_step()
+    subroutine chemistry_step(block)
 
 #ifdef MPAS_USE_MUSICA
         use mpas_musica, only: musica_step
 #endif
+        use mpas_derived_types, only : block_type
         use mpas_log, only : mpas_log_write
+        use mpas_quacs, only : quacs_run_hook
+
+        ! Arguments
+        type(block_type), pointer :: block
 
 #ifdef MPAS_USE_MUSICA
         call mpas_log_write('Stepping chemistry packages...')
         ! call musica_step()
 #endif
+
+        call quacs_run_hook(block, 'before_dynamics')
 
     end subroutine chemistry_step
 
@@ -130,17 +138,24 @@ module mpas_atm_chemistry
     !>  This routine finalizes the chemistry packages, cleaning up
     !>  any resources and data structures used during the simulation.
     !------------------------------------------------------------------------
-    subroutine chemistry_finalize()
+    subroutine chemistry_finalize(configs)
 
 #ifdef MPAS_USE_MUSICA
         use mpas_musica, only: musica_finalize
 #endif
+        use mpas_derived_types, only : mpas_pool_type
         use mpas_log, only : mpas_log_write
+        use mpas_quacs, only : quacs_finalize
+
+        ! Arguments
+        type(mpas_pool_type), intent(in) :: configs
 
 #ifdef MPAS_USE_MUSICA
         call mpas_log_write('Finalizing chemistry packages...')
         call musica_finalize()
 #endif
+
+        call quacs_finalize(configs)
 
     end subroutine chemistry_finalize
 

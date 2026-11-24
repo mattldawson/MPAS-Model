@@ -913,6 +913,18 @@ endif
 	override CPPFLAGS += $(MUSICA_FFLAGS)
 endif
 
+# Optional QUACS support for chemistry
+ifeq "$(shell echo $(QUACS) | tr '[:upper:]' '[:lower:]')" "true"
+ifeq ($(shell pkg-config --exists quacs_embed && echo yes || echo no), no)
+$(error "quacs_embed package is not installed. Please install it to proceed.")
+endif
+	QUACS_LIBS += $(shell pkg-config --libs quacs_embed)
+	QUACS_FFLAGS = -DMPAS_USE_QUACS
+
+	LIBS += $(QUACS_LIBS)
+	override CPPFLAGS += $(QUACS_FFLAGS)
+endif
+
 ifeq "$(USE_PAPI)" "true"
 	CPPINCLUDES += -I$(PAPI)/include -D_PAPI
 	FCINCLUDES += -I$(PAPI)/include
@@ -1529,6 +1541,12 @@ else
 MUSICA_MESSAGE = "MPAS was not linked with the MUSICA-Fortran library."
 endif
 
+ifneq "$(QUACS_FFLAGS)" ""
+QUACS_MESSAGE = "MPAS was linked with the QUACS embedding library version $(shell pkg-config --modversion quacs_embed)."
+else
+QUACS_MESSAGE = "MPAS was not linked with the QUACS embedding library."
+endif
+
 ifneq "$(SCOTCH)" ""
 MAIN_DEPS += scotch_c_test
 SCOTCH_MESSAGE = "MPAS has been linked with the Scotch graph partitioning library."
@@ -1573,6 +1591,7 @@ mpas_main: $(MAIN_DEPS)
 	@echo $(OPENMP_OFFLOAD_MESSAGE)
 	@echo $(OPENACC_MESSAGE)
 	@echo $(MUSICA_MESSAGE)
+	@echo $(QUACS_MESSAGE)
 	@echo $(SCOTCH_MESSAGE)
 	@echo $(SHAREDLIB_MESSAGE)
 ifeq "$(AUTOCLEAN)" "true"

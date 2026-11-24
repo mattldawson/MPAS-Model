@@ -100,6 +100,27 @@ RUN cd /tmp \
     && find /usr/local -name 'musica-fortran.pc' \
            -exec sed -i 's/^Libs:.*/& -lfmt -lstdc++/' {} \;
 
+# ---- QUACS ----
+# QUACS is installed in a Python virtual environment under /usr/local, and the
+# library that MPAS links with it is build for that environment's Python.
+ARG QUACS_GIT_TAG=main
+RUN dnf -y install python3-devel python3-pip \
+    && dnf clean all \
+    && python3 -m venv /usr/local/quacs-venv \
+    && cd /tmp \
+    && git clone --depth 1 --branch ${QUACS_GIT_TAG} https://github.com/cohere-llc/quacs.git \
+    && /usr/local/quacs-venv/bin/pip install  --no-cache-dir ./quacs \
+    && cmake -S quacs/embed -B quacs/embed/build \
+             -DCMAKE_BUILD_TYPE=Release \
+             -DCMAKE_INSTALL_PREFIX=/usr/local \
+             -DCMAKE_INSTALL_LIBDIR=lib \
+             -DPython_EXECUTABLE=/usr/local/quacs-venv/bin/python \
+    && cmake --build quacs/embed/build -j"$(nproc)" \
+    && ctest --test-dir quacs/embed/build --output-on-failure \
+    && cmake --install quacs/embed/build \
+    && ldconfig \
+    && rm -rf /tmp/quacs
+
 # ---------------------------------------------------------------------------
 # Compile MPAS-A from source
 # ---------------------------------------------------------------------------
@@ -117,7 +138,7 @@ RUN cd src/core_atmosphere/physics \
 
 # Build init_atmosphere core first, then atmosphere core
 RUN make -j"$(nproc)" gnu CORE=init_atmosphere AUTOCLEAN=true MUSICA=true \
-    && make -j"$(nproc)" gnu CORE=atmosphere AUTOCLEAN=true MUSICA=true
+    && make -j"$(nproc)" gnu CORE=atmosphere AUTOCLEAN=true MUSICA=true QUACS=true
 
 # ---------------------------------------------------------------------------
 # Lean runtime image with MPAS executables
@@ -127,6 +148,7 @@ FROM docker.io/library/fedora:41 AS run
 RUN dnf -y update && dnf -y install \
         hdf5 \
         openmpi \
+        python3 \
         wget \
         zlib \
     && dnf clean all
@@ -191,3 +213,9 @@ RUN pkg-config --exists musica-fortran && echo "musica-fortran found" \
     || (echo "ERROR: musica-fortran not found via pkg-config" && exit 1)
 
 WORKDIR /mpas
+
+# verify QUACS is findable, and that its Python environment works in the container
+RUN pkg-config --exists quacs_embed && echo "quacs_embed found" \
+    || (echo "ERROR: quacs_embed not found in pkg-config" && exit 1)
+RUN /usr/local/quacs-venv/bin/python -c "import quacs.embed" \
+    || (echo "ERROR: QUACS cannot be imported" && exit 1)
